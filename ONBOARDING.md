@@ -75,7 +75,57 @@
 | 8 | Decoupling Cap VCC | 100nF 25V | 3 | 2 | **6** | ต่อใกล้ขา VCC ของ IC |
 | 9 | Heatsink MOSFET | TO-220 fin | 6 | 20 | **120** | Rth ≤ 5 °C/W |
 | 10 | Gate Protection Zener | **1N4746A** (18V 1W) | 6 | 3 | **18** | ต่อ Gate–Source คู่ขนาน clamp Vgs ≤ 18V DO-41 |
-| | | | | **รวมประมาณ** | **~609 ฿** | |
+| | | | | | | |
+| | **⚡ Power Supply — 48V → 12V (Gate Driver VCC)** | | | | | |
+| 11 | Buck Regulator 48V→12V | **LM2576HVT-12** | 1 | 60 | **60** | TO-220, 3A, ทน 60V, Fixed 12V |
+| 12 | Inductor L1 | 100µH 3A Ferrite | 1 | 35 | **35** | อิ่มตัว ≥ 3A แกน ferrite |
+| 13 | Catch Diode D1 | 1N5822 Schottky | 1 | 8 | **8** | Schottky 3A/40V fast recovery |
+| 14 | Input Cap Cin1 | 100µF 63V Electrolytic | 1 | 12 | **12** | ทนแรงดัน ≥ 63V ต่อขา Vin |
+| 15 | Output Cap Cout1 | 100µF 25V Electrolytic | 1 | 8 | **8** | Output filter |
+| | | | | | | |
+| | **⚡ Power Supply — 12V → 5V (ESP32)** | | | | | |
+| 16 | Buck Regulator 12V→5V | **LM2576T-5.0** | 1 | 40 | **40** | TO-220, 3A, Fixed 5V สำหรับ ESP32 |
+| 17 | Inductor L2 | 100µH 3A Ferrite | 1 | 35 | **35** | ใช้เบอร์เดียวกับ L1 ได้เลย |
+| 18 | Catch Diode D2 | 1N5822 Schottky | 1 | 8 | **8** | Schottky 3A/40V เหมือน D1 |
+| 19 | Input Cap Cin2 | 100µF 25V Electrolytic | 1 | 8 | **8** | ต่อขา Vin LM2576T |
+| 20 | Output Cap Cout2 | 100µF 10V Electrolytic | 1 | 5 | **5** | Output filter สำหรับ ESP32 |
+| | | | | **รวมประมาณ** | **~846 ฿** | |
+
+---
+
+## Power Supply Circuit — LM2576
+
+### Block Diagram
+```
+48V Bus
+  ├──[LM2576HVT-12]──→ 12V ──→ Gate Driver VCC (EG3013 ×3)
+  │
+  └──[LM2576HVT-12]──→ 12V ──[LM2576T-5.0]──→ 5V ──→ ESP32
+```
+
+### วงจร LM2576 (ใช้เหมือนกันทั้งสองตัว)
+```
+         LM2576HVT / LM2576T
+         ┌──────────────────┐
+V_in ────┤ Vin (1)  OUT (2) ├───┬──[L 100µH]───┬─── V_out
+[Cin]    │                  │   │              │
+100µF    │  GND (3)  FB (4) │  [D1          [Cout
+         │                  │  1N5822]      100µF]
+         │   ON/OFF (5) ────┤ ต่อ GND = Always ON
+         └──────────────────┘
+               │
+              GND
+```
+
+### ⚠️ ข้อควรระวัง
+| ประเด็น | รายละเอียด |
+|--------|-----------|
+| **LM2576HVT-12** V_in max | 60V — ทน spike จาก 48V bus ได้ |
+| **LM2576T-5.0** V_in max | 40V — ต่อจาก 12V เท่านั้น! ห้ามต่อตรงจาก 48V |
+| Catch Diode | ต้องใช้ **Schottky** (1N5822) ห้ามใช้ 1N4007 (ช้าเกินไป) |
+| Input Cap | Cin ของ LM2576HVT ต้องทน **≥ 63V** |
+
+> 🔍 **Shopee keyword**: `LM2576HVT-12` / `LM2576T-5.0` / `1N5822 Schottky`
 
 ---
 
@@ -142,4 +192,4 @@ HIN และ LIN ห้าม HIGH พร้อมกัน → shoot-through =
 
 ---
 
-*Project: 01_Inverter_500W · Rev 1.0 · 2026-05-24*
+*Project: 01_Inverter_500W · Rev 1.1 · 2026-05-27*
