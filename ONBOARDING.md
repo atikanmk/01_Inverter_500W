@@ -74,7 +74,8 @@
 | 7 | Gate Pull-down | 10kΩ 0.25W | 6 | 1 | **6** | ป้องกัน gate float |
 | 8 | Decoupling Cap VCC | 100nF 25V | 3 | 2 | **6** | ต่อใกล้ขา VCC ของ IC |
 | 9 | Heatsink MOSFET | TO-220 fin | 6 | 20 | **120** | Rth ≤ 5 °C/W |
-| | | | | **รวมประมาณ** | **~591 ฿** | |
+| 10 | Gate Protection Zener | **1N4746A** (18V 1W) | 6 | 3 | **18** | ต่อ Gate–Source คู่ขนาน clamp Vgs ≤ 18V DO-41 |
+| | | | | **รวมประมาณ** | **~609 ฿** | |
 
 ---
 
