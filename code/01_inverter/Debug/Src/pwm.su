@@ -1,0 +1,8 @@
+../Src/pwm.c:71:16:pwm_encode_deadtime_us	24	static
+../Src/pwm.c:100:17:pwm_limit_duty	16	static
+../Src/pwm.c:109:17:pwm_duty_to_ccr	24	static
+../Src/pwm.c:124:6:PWM_SetDutyUVW	16	static
+../Src/pwm.c:131:6:PWM_On100us	8	static
+../Src/pwm.c:138:6:PWM_EnableOutput	4	static
+../Src/pwm.c:143:6:PWM_DisableOutput	4	static
+../Src/pwm.c:148:6:PWM_Init	24	static

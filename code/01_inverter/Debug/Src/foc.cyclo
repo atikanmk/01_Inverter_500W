@@ -1,0 +1,3 @@
+../Src/foc.c:71:14:eng_foc_init	1
+../Src/foc.c:96:5:u16g_foc_main	1
+../Src/foc.c:131:14:eng_foc_park_transform	1
