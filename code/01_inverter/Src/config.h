@@ -23,17 +23,17 @@ typedef struct
 }ST_CONFIG_ADC;
 typedef struct
 {
-    uint8_t motor_pole_pairs;
-    uint16_t speed_max_rpm;
-    uint16_t dc_max;
-    uint16_t phase_max;
-    uint8_t tps_perc_start;
-    uint32_t current_phase_v_gain_uv_per_a;
-    uint32_t current_phase_w_gain_uv_per_a;
+    u8 u8t_motor_pole_pairs;
+    u16 u16t_speed_max_rpm;
+    u16 u16t_dc_max;
+    u16 u16t_phase_max;
+    u8 u8t_tps_perc_start;
+    u32 u32t_current_phase_v_gain_mv_per_ca;
+    u32 u32t_current_phase_w_gain_mv_per_ca;
     ST_CONFIG_ADC stt_adc[EN_CONFIG_ADC_COUNT];
-} inverter_config_t;
+} ST_INVERTER_CONFIG;
 
-const inverter_config_t *Config_Get(void);
+const ST_INVERTER_CONFIG *Config_Get(void);
 
 #ifdef __cplusplus
 }

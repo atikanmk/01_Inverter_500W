@@ -549,19 +549,19 @@ int32_t Hall_GetElectricalRpm(void)
 
 int32_t Hall_GetMechanicalRpm(void)
 {
-    const inverter_config_t *cfg;
+    const ST_INVERTER_CONFIG *cfg;
     int32_t elec_rpm;
 
     cfg = Config_Get();
     elec_rpm = Hall_GetElectricalRpm();
 
-    if ((cfg == 0) || (cfg->motor_pole_pairs == 0u))
+    if ((cfg == 0) || (cfg->u8t_motor_pole_pairs == 0u))
     {
         g_hall_speed_mech_rpm = 0;
         return 0;
     }
 
-    g_hall_speed_mech_rpm = elec_rpm / (int32_t)cfg->motor_pole_pairs;
+    g_hall_speed_mech_rpm = elec_rpm / (int32_t)cfg->u8t_motor_pole_pairs;
     return g_hall_speed_mech_rpm;
 }
 

@@ -70,7 +70,7 @@ void Task_On100us(void)
 {
     //g_task_hall_angle_est = eng_hall_ang_est();
     (void)ADC_TriggerFromPwmCycle();
-    CNV_On100us();
+    eng_cnv_100us();
     PWM_On100us();
 
     g_task_div_1ms++;

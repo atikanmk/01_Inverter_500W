@@ -43,7 +43,7 @@ int main(void)
     ADC_Init();
     Hall_Init();
 	PWM_Init();
-	CNV_Init();
+	eng_cnv_init();
 	Task_Init();
     GPIOA_CRL &= ~(0xFu << (3u * 4u));
     GPIOA_CRL |= (0x4u << (3u * 4u));

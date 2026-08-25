@@ -151,7 +151,7 @@ static void adc_calibrate(u32 adc_base)
     }
 }
 
-static void adc_config_sequence(u32 adc_base, const inverter_config_t *cfg)
+static void adc_config_sequence(u32 adc_base, const ST_INVERTER_CONFIG *cfg)
 {
     u32 sqr3;
     u8 i;
@@ -207,7 +207,7 @@ static EN_COM_STS_T adc_read_single_channel(u32 adc_base, u8 channel, u16 *value
 
 void ADC_Init(void)
 {
-    const inverter_config_t *cfg;
+    const ST_INVERTER_CONFIG *cfg;
     u8 i;
     u8 channel;
     u8 group;
