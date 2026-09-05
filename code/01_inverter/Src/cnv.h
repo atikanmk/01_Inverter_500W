@@ -38,7 +38,7 @@ extern "C" {
  ************************************/
 EN_COM_STS_T eng_cnv_init(void);
 EN_COM_STS_T eng_cnv_100us(void);
-EN_COM_STS_T eng_cnv_get_phase_currents(int32_t *phase_u_ca, int32_t *phase_v_ca, int32_t *phase_w_ca);
+EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca);
 
 #ifdef __cplusplus
 }

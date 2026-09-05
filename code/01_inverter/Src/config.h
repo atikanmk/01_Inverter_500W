@@ -18,18 +18,18 @@ typedef enum
 } EN_CONFIG_ADC_T;
 typedef struct
 {
-    u8 u8t_adc_group;
-    u8 u8t_adc_pin;
+    u1 u1t_adc_group;
+    u1 u1t_adc_pin;
 }ST_CONFIG_ADC;
 typedef struct
 {
-    u8 u8t_motor_pole_pairs;
-    u16 u16t_speed_max_rpm;
-    u16 u16t_dc_max;
-    u16 u16t_phase_max;
-    u8 u8t_tps_perc_start;
-    u32 u32t_current_phase_v_gain_mv_per_ca;
-    u32 u32t_current_phase_w_gain_mv_per_ca;
+    u1 u1t_motor_pole_pairs;
+    u2 u2t_speed_max_rpm;
+    u2 u2t_dc_max;
+    u2 u2t_phase_max;
+    u1 u1t_tps_perc_start;
+    u4 u4t_curr_ph_v_gain_mv_per_ca;
+    u4 u4t_curr_ph_w_gain_mv_per_ca;
     ST_CONFIG_ADC stt_adc[EN_CONFIG_ADC_COUNT];
 } ST_INVERTER_CONFIG;
 

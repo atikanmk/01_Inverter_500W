@@ -30,17 +30,17 @@
 /************************************
  * STATIC VARIABLES
  ************************************/
-static u16 u16gv_cnv_phase_v_mv;
-static u16 u16gv_cnv_phase_w_mv;
-static u16 u16gv_cnv_phase_v_offset_mv;
-static u16 u16gv_cnv_phase_w_offset_mv;
-static s32 s32gv_cnv_phase_u_current_ca;
-static s32 s32gv_cnv_phase_v_current_ca;
-static s32 s32gv_cnv_phase_w_current_ca;
-static u32 u32gv_cnv_phase_v_offset_sum_mv;
-static u32 u32gv_cnv_phase_w_offset_sum_mv;
-static u16 u16gv_cnv_offset_sample_count;
-static u8 u8gv_cnv_offset_ready;
+static u2 u16gv_cnv_phase_v_mv;
+static u2 u16gv_cnv_phase_w_mv;
+static u2 u16gv_cnv_phase_v_offset_mv;
+static u2 u16gv_cnv_phase_w_offset_mv;
+static s4 s32gv_cnv_phase_u_current_ca;
+static s4 s32gv_cnv_phase_v_current_ca;
+static s4 s32gv_cnv_phase_w_current_ca;
+static u4 u32gv_cnv_phase_v_offset_sum_mv;
+static u4 u32gv_cnv_phase_w_offset_sum_mv;
+static u2 u16gv_cnv_offset_sample_count;
+static u1 u8gv_cnv_offset_ready;
 
 /************************************
  * GLOBAL VARIABLES
@@ -51,7 +51,7 @@ static u8 u8gv_cnv_offset_ready;
  ************************************/
 static uint16_t cnv_adc_raw_to_mv(uint16_t raw_value);
 static EN_COM_STS_T ens_cnv_update_adc_values(void);
-static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u32 u32t_delta_mv, u32 u32t_gain_mv_per_ca,s32* s32t_out);
+static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u4 u32t_delta_mv, u4 u32t_gain_mv_per_ca,s4* s32t_out);
 static EN_COM_STS_T ens_cnv_curr_offset(void);
 static EN_COM_STS_T ens_cnv_curr(void);
 
@@ -79,7 +79,7 @@ static uint16_t cnv_adc_raw_to_mv(uint16_t raw_value)
  */
 static EN_COM_STS_T ens_cnv_update_adc_values(void)
 {
-    u16 raw_array[EN_CONFIG_ADC_COUNT];
+    u2 raw_array[EN_CONFIG_ADC_COUNT];
     /*==========INPUT==========*/
     /*========OPERATION========*/
     if (ADC_ReadAll12bit(raw_array) == EN_COM_STS_OK)
@@ -100,7 +100,7 @@ static EN_COM_STS_T ens_cnv_update_adc_values(void)
  * @param  u32t_gain_mv_per_ca:  Sensor gain in millivolts per centi ampere (u32)
  * @return Current in centi amperes
  */
-static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u32 u32t_delta_mv, u32 u32t_gain_mv_per_ca,s32* s32t_out)
+static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u4 u32t_delta_mv, u4 u32t_gain_mv_per_ca,s4* s32t_out)
 {
     EN_COM_STS_T ent_ret;
    /*==========INPUT==========*/
@@ -112,7 +112,7 @@ static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u32 u32t_delta_mv, u32 u32t_ga
     else
     {
     /*=========OUTPUT==========*/
-        s32t_out[0] = (s32)((u32t_delta_mv * u32t_gain_mv_per_ca) / 1000u);
+        s32t_out[0] = (s4)((u32t_delta_mv * u32t_gain_mv_per_ca) / 1000u);
         ent_ret = EN_COM_STS_OK;
     }
 
@@ -141,8 +141,8 @@ static EN_COM_STS_T ens_cnv_curr_offset(void)
 
         if (u16gv_cnv_offset_sample_count >= CNV_OFFSET_SAMPLE_COUNT)
         {
-            u16gv_cnv_phase_v_offset_mv = (u16)(u32gv_cnv_phase_v_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
-            u16gv_cnv_phase_w_offset_mv = (u16)(u32gv_cnv_phase_w_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
+            u16gv_cnv_phase_v_offset_mv = (u2)(u32gv_cnv_phase_v_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
+            u16gv_cnv_phase_w_offset_mv = (u2)(u32gv_cnv_phase_w_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
             u8gv_cnv_offset_ready = 1u;
             u32gv_cnv_phase_v_offset_sum_mv = 0;
             u32gv_cnv_phase_w_offset_sum_mv = 0;
@@ -184,11 +184,11 @@ EN_COM_STS_T ens_cnv_curr(void)
 
     cfg = Config_Get();
 
-    phase_v_delta_mv = (s32)u16gv_cnv_phase_v_mv - (s32)u16gv_cnv_phase_v_offset_mv;
-    phase_w_delta_mv = (s32)u16gv_cnv_phase_w_mv - (s32)u16gv_cnv_phase_w_offset_mv;
+    phase_v_delta_mv = (s4)u16gv_cnv_phase_v_mv - (s4)u16gv_cnv_phase_v_offset_mv;
+    phase_w_delta_mv = (s4)u16gv_cnv_phase_w_mv - (s4)u16gv_cnv_phase_w_offset_mv;
 
-    ens_cnv_voltage_to_current_ca(phase_v_delta_mv, cfg->u32t_current_phase_v_gain_mv_per_ca, &s32gv_cnv_phase_v_current_ca);
-    ens_cnv_voltage_to_current_ca(phase_w_delta_mv, cfg->u32t_current_phase_w_gain_mv_per_ca, &s32gv_cnv_phase_w_current_ca);
+    ens_cnv_voltage_to_current_ca(phase_v_delta_mv, cfg->u4t_curr_ph_v_gain_mv_per_ca, &s32gv_cnv_phase_v_current_ca);
+    ens_cnv_voltage_to_current_ca(phase_w_delta_mv, cfg->u4t_curr_ph_w_gain_mv_per_ca, &s32gv_cnv_phase_w_current_ca);
     s32gv_cnv_phase_u_current_ca = -(s32gv_cnv_phase_v_current_ca + s32gv_cnv_phase_w_current_ca);
     return EN_COM_STS_OK;
 }
@@ -202,11 +202,11 @@ EN_COM_STS_T ens_cnv_curr(void)
  * @param  phase_w_ca: Pointer to store phase W current in centi amperes
  * @return EN_COM_STS_OK
  */
-EN_COM_STS_T eng_cnv_get_phase_currents(int32_t *phase_u_ca, int32_t *phase_v_ca, int32_t *phase_w_ca)
+EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca)
 {
-    *phase_u_ca = s32gv_cnv_phase_u_current_ca;
-    *phase_v_ca = s32gv_cnv_phase_v_current_ca;
-    *phase_w_ca = s32gv_cnv_phase_w_current_ca;
+    *ps4t_phase_u_ca = s32gv_cnv_phase_u_current_ca;
+    *ps4t_phase_v_ca = s32gv_cnv_phase_v_current_ca;
+    *ps4t_phase_w_ca = s32gv_cnv_phase_w_current_ca;
 
     return EN_COM_STS_OK;
 }

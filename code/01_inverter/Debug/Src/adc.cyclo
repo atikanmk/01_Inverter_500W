@@ -1,4 +1,4 @@
-../Src/adc.c:79:12:adc_base_from_group	2
+../Src/adc.c:79:11:adc_base_from_group	2
 ../Src/adc.c:89:13:adc_set_channel_sample_time	3
 ../Src/adc.c:112:13:adc_config_gpio_analog_from_channel	5
 ../Src/adc.c:133:13:adc_calibrate	5

@@ -33,6 +33,10 @@
 static volatile uint32_t g_task_tick_100us;
 static uint8_t g_task_div_1ms;
 
+/* Optional 100us callback; override in user code later. */
+EN_COM_STS_T eng_task_on_100us(void);
+EN_COM_STS_T eng_task_on_1ms(void);
+
 void Task_Init(void)
 {
     uint32_t psc;
@@ -66,7 +70,7 @@ uint32_t Task_GetTick100us(void)
     return g_task_tick_100us;
 }
 
-void Task_On100us(void)
+EN_COM_STS_T eng_task_on_100us(void)
 {
     //g_task_hall_angle_est = eng_hall_ang_est();
     (void)ADC_TriggerFromPwmCycle();
@@ -77,17 +81,19 @@ void Task_On100us(void)
     if (g_task_div_1ms >= 10u)
     {
         g_task_div_1ms = 0u;
-        Task_On1ms();
+        eng_task_on_1ms();
     }
+    return EN_COM_STS_OK;
 }
 volatile int32_t g_task_speed_elec_rpm;
 volatile int32_t g_task_speed_mech_rpm;
-void Task_On1ms(void)
+EN_COM_STS_T eng_task_on_1ms(void)
 {
     g_task_speed_elec_rpm = Hall_GetElectricalRpm();
     g_task_speed_mech_rpm = Hall_GetMechanicalRpm();
 
     PWM_SetDutyUVW(500u, 500u, 500u);
+    return EN_COM_STS_OK;
 }
 
 void TIM2_IRQHandler(void)
@@ -96,6 +102,6 @@ void TIM2_IRQHandler(void)
     {
         TIM2_SR &= ~TIM_SR_UIF;
         g_task_tick_100us++;
-        Task_On100us();
+        eng_task_on_100us();
     }
 }

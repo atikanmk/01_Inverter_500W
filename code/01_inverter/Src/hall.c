@@ -45,20 +45,20 @@
 
 #define HALL_LINE_MASK ((1u << HALL_CH1_PIN) | (1u << HALL_CH2_PIN) | (1u << HALL_CH3_PIN))
 
-volatile uint8_t g_hall1_state;
-volatile uint8_t g_hall2_state;
-volatile uint8_t g_hall3_state;
-volatile uint8_t g_hall_state;
-volatile uint16_t g_hall_angle_deg;
-volatile uint16_t hall_est_curr_ang;
-volatile uint16_t hall_est_ang_ref;
-volatile uint16_t hall_est_ang_next;
+static volatile u1 u1g_hall_ch1_state;
+static volatile u1 u1g_hall_ch2_state;
+static volatile u1 u1g_hall_ch3_state;
+static volatile u1 u1g_hall_state;
+static volatile u2 u2g_hall_angle_deg;
+static volatile u2 u2g_hall_est_curr_ang;
+static volatile u2 u2g_hall_est_ang_ref;
+static volatile u2 u2g_hall_est_ang_next;
 
-const uint16_t g_hall_state_angle_deg[8] = {
+static const u2 u2g_hall_state_angle_deg[8] = {
     0u,   /* 000: invalid */
-    120u,  /* 001 */
-    0u, /* 010 */
-    60u, /* 011 */
+    120u, /* 001 */
+    0u,   /* 010 */
+    60u,  /* 011 */
     240u, /* 100 */
     180u, /* 101 */
     300u, /* 110 */
@@ -79,8 +79,8 @@ static volatile uint8_t hall_est_has_prev_sector;
 static volatile uint8_t hall_est_prev_sector;
 static volatile int8_t hall_est_dir;
 
-volatile int32_t g_hall_speed_elec_rpm;
-volatile int32_t g_hall_speed_mech_rpm;
+static volatile s4 s4g_hall_speed_elec_rpm;
+static volatile s4 s4g_hall_speed_mech_rpm;
 
 static uint32_t hall_debounce_cycles;
 
@@ -126,7 +126,7 @@ static void hall_est_force_reset(uint32_t now_cycle)
 {
     uint8_t curr_sector;
 
-    curr_sector = hall_angle_to_sector(g_hall_angle_deg);
+    curr_sector = hall_angle_to_sector(u2g_hall_angle_deg);
 
     hall_est_reset_history();
     hall_est_dir = 0;
@@ -134,9 +134,9 @@ static void hall_est_force_reset(uint32_t now_cycle)
     hall_est_prev_sector = curr_sector;
     hall_est_last_cycle = now_cycle;
 
-    hall_est_ang_ref = hall_sector_to_angle(curr_sector);
-    hall_est_ang_next = hall_est_ang_ref;
-    hall_est_curr_ang = hall_est_ang_ref;
+    u2g_hall_est_ang_ref = hall_sector_to_angle(curr_sector);
+    u2g_hall_est_ang_next = u2g_hall_est_ang_ref;
+    u2g_hall_est_curr_ang = u2g_hall_est_ang_ref;
 }
 
 static void hall_est_reset_history(void)
@@ -215,12 +215,12 @@ static void hall_refresh_all_levels(void)
     hall_level[1] = hall_read_pin(HALL_CH2_PIN);
     hall_level[2] = hall_read_pin(HALL_CH3_PIN);
 
-    g_hall1_state = hall_level[0];
-    g_hall2_state = hall_level[1];
-    g_hall3_state = hall_level[2];
+    u1g_hall_ch1_state = hall_level[0];
+    u1g_hall_ch2_state = hall_level[1];
+    u1g_hall_ch3_state = hall_level[2];
 
-    g_hall_state = (uint8_t)((hall_level[2] << 2) | (hall_level[1] << 1) | hall_level[0]);
-    g_hall_angle_deg = g_hall_state_angle_deg[g_hall_state];
+    u1g_hall_state = (u1)((hall_level[2] << 2) | (hall_level[1] << 1) | hall_level[0]);
+    u2g_hall_angle_deg = u2g_hall_state_angle_deg[u1g_hall_state];
 }
 
 static void hall_est_reset_on_interrupt(void)
@@ -232,7 +232,7 @@ static void hall_est_reset_on_interrupt(void)
     int8_t next_dir;
 
     now_cycle = DWT_CYCCNT;
-    curr_sector = hall_angle_to_sector(g_hall_angle_deg);
+    curr_sector = hall_angle_to_sector(u2g_hall_angle_deg);
 
     if (hall_est_is_timeout(now_cycle) != 0u)
     {
@@ -278,22 +278,22 @@ static void hall_est_reset_on_interrupt(void)
 
     hall_est_last_cycle = now_cycle;
     hall_est_prev_sector = curr_sector;
-    hall_est_ang_ref = hall_sector_to_angle(curr_sector);
+    u2g_hall_est_ang_ref = hall_sector_to_angle(curr_sector);
 
     if (hall_est_dir > 0)
     {
-        hall_est_ang_next = hall_sector_to_angle((uint8_t)((curr_sector + 1u) % 6u));
+        u2g_hall_est_ang_next = hall_sector_to_angle((uint8_t)((curr_sector + 1u) % 6u));
     }
     else if (hall_est_dir < 0)
     {
-        hall_est_ang_next = hall_sector_to_angle((uint8_t)((curr_sector + 5u) % 6u));
+        u2g_hall_est_ang_next = hall_sector_to_angle((uint8_t)((curr_sector + 5u) % 6u));
     }
     else
     {
-        hall_est_ang_next = hall_est_ang_ref;
+        u2g_hall_est_ang_next = u2g_hall_est_ang_ref;
     }
 
-    hall_est_curr_ang = hall_est_ang_ref;
+    u2g_hall_est_curr_ang = u2g_hall_est_ang_ref;
 }
 
 static void hall_handle_exti_line(uint8_t line, uint8_t channel)
@@ -387,7 +387,7 @@ uint32_t Hall_GetEdgeCount(uint8_t channel)
     return hall_edge_count[channel];
 }
 
-EN_COM_STS_T eng_hall_ang_est(u16 *pu16t_angle_deg)
+EN_COM_STS_T eng_hall_ang_est(u2 *pu2t_angle_deg)
 {
     uint32_t now_cycle;
     uint32_t elapsed_cycle;
@@ -405,18 +405,18 @@ EN_COM_STS_T eng_hall_ang_est(u16 *pu16t_angle_deg)
 
     if ((hall_est_avg_sector_cycles == 0u) || (hall_est_dir == 0))
     {
-        hall_est_curr_ang = hall_est_ang_ref;
-        *pu16t_angle_deg = (u16)hall_est_curr_ang;
+        u2g_hall_est_curr_ang = u2g_hall_est_ang_ref;
+        *pu2t_angle_deg = (u2)u2g_hall_est_curr_ang;
     }
 
     elapsed_cycle = now_cycle - hall_est_last_cycle;
-    ref_angle = hall_norm_angle(hall_est_ang_ref);
-    next_angle = hall_norm_angle(hall_est_ang_next);
+    ref_angle = hall_norm_angle(u2g_hall_est_ang_ref);
+    next_angle = hall_norm_angle(u2g_hall_est_ang_next);
 
     if (elapsed_cycle >= hall_est_avg_sector_cycles)
     {
-        hall_est_curr_ang = hall_est_ang_next;
-        *pu16t_angle_deg = (u16)hall_est_curr_ang;
+        u2g_hall_est_curr_ang = u2g_hall_est_ang_next;
+        *pu2t_angle_deg = (u2)u2g_hall_est_curr_ang;
     }
 
     est_offset = (elapsed_cycle * HALL_EST_SECTOR_DEG) / hall_est_avg_sector_cycles;
@@ -427,10 +427,10 @@ EN_COM_STS_T eng_hall_ang_est(u16 *pu16t_angle_deg)
 
     if (hall_est_dir > 0)
     {
-        estimated = (uint16_t)(ref_angle + est_offset);
+        estimated = (u2)(ref_angle + est_offset);
         if (estimated >= HALL_EST_FULL_DEG)
         {
-            estimated = (uint16_t)(estimated - HALL_EST_FULL_DEG);
+            estimated = (u2)(estimated - HALL_EST_FULL_DEG);
         }
 
         if (ref_angle <= next_angle)
@@ -444,21 +444,21 @@ EN_COM_STS_T eng_hall_ang_est(u16 *pu16t_angle_deg)
         {
             if ((estimated > next_angle) && (estimated < ref_angle))
             {
-                estimated = next_angle;
+                estimated = (u2)next_angle;
             }
         }
 
-        hall_est_curr_ang = estimated;
+        u2g_hall_est_curr_ang = estimated;
     }
     else
     {
         if (ref_angle >= est_offset)
         {
-            estimated = (uint16_t)(ref_angle - est_offset);
+            estimated = (u2)(ref_angle - est_offset);
         }
         else
         {
-            estimated = (uint16_t)(HALL_EST_FULL_DEG + ref_angle - est_offset);
+            estimated = (u2)(HALL_EST_FULL_DEG + ref_angle - est_offset);
         }
 
         if (ref_angle >= next_angle)
@@ -476,23 +476,23 @@ EN_COM_STS_T eng_hall_ang_est(u16 *pu16t_angle_deg)
             }
         }
 
-        hall_est_curr_ang = estimated;
+        u2g_hall_est_curr_ang = estimated;
     }
 
     if (hall_est_dir > 0)
     {
         if (ref_angle <= next_angle)
         {
-            if (hall_est_curr_ang > next_angle)
+            if (u2g_hall_est_curr_ang > next_angle)
             {
-                hall_est_curr_ang = next_angle;
+                u2g_hall_est_curr_ang = next_angle;
             }
         }
         else
         {
-            if ((hall_est_curr_ang > next_angle) && (hall_est_curr_ang < ref_angle))
+            if ((u2g_hall_est_curr_ang > next_angle) && (u2g_hall_est_curr_ang < ref_angle))
             {
-                hall_est_curr_ang = next_angle;
+                u2g_hall_est_curr_ang = next_angle;
             }
         }
     }
@@ -500,16 +500,16 @@ EN_COM_STS_T eng_hall_ang_est(u16 *pu16t_angle_deg)
     {
         if (ref_angle >= next_angle)
         {
-            if (hall_est_curr_ang < next_angle)
+            if (u2g_hall_est_curr_ang < next_angle)
             {
-                hall_est_curr_ang = next_angle;
+                u2g_hall_est_curr_ang = next_angle;
             }
         }
         else
         {
-            if ((hall_est_curr_ang < next_angle) && (hall_est_curr_ang > ref_angle))
+            if ((u2g_hall_est_curr_ang < next_angle) && (u2g_hall_est_curr_ang > ref_angle))
             {
-                hall_est_curr_ang = next_angle;
+                u2g_hall_est_curr_ang = next_angle;
             }
         }
     }
@@ -528,7 +528,7 @@ int32_t Hall_GetElectricalRpm(void)
         (hall_est_avg_sector_cycles == 0u) ||
         (hall_est_dir == 0))
     {
-        g_hall_speed_elec_rpm = 0;
+        s4g_hall_speed_elec_rpm = 0;
         return 0;
     }
 
@@ -537,14 +537,14 @@ int32_t Hall_GetElectricalRpm(void)
 
     if (hall_est_dir < 0)
     {
-        g_hall_speed_elec_rpm = -(int32_t)rpm_abs;
+        s4g_hall_speed_elec_rpm = -(s4)rpm_abs;
     }
     else
     {
-        g_hall_speed_elec_rpm = (int32_t)rpm_abs;
+        s4g_hall_speed_elec_rpm = (s4)rpm_abs;
     }
 
-    return g_hall_speed_elec_rpm;
+    return s4g_hall_speed_elec_rpm;
 }
 
 int32_t Hall_GetMechanicalRpm(void)
@@ -555,14 +555,14 @@ int32_t Hall_GetMechanicalRpm(void)
     cfg = Config_Get();
     elec_rpm = Hall_GetElectricalRpm();
 
-    if ((cfg == 0) || (cfg->u8t_motor_pole_pairs == 0u))
+    if ((cfg == 0) || (cfg->u1t_motor_pole_pairs == 0u))
     {
-        g_hall_speed_mech_rpm = 0;
+        s4g_hall_speed_mech_rpm = 0;
         return 0;
     }
 
-    g_hall_speed_mech_rpm = elec_rpm / (int32_t)cfg->u8t_motor_pole_pairs;
-    return g_hall_speed_mech_rpm;
+    s4g_hall_speed_mech_rpm = elec_rpm / (s4)cfg->u1t_motor_pole_pairs;
+    return s4g_hall_speed_mech_rpm;
 }
 
 void Hall_OnEdge(uint8_t channel, uint8_t level)

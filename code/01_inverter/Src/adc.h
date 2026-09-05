@@ -12,8 +12,8 @@ extern "C" {
 
 void ADC_Init(void);
 EN_COM_STS_T ADC_TriggerFromPwmCycle(void);
-EN_COM_STS_T ADC_ReadAll12bit(u16 raw_array[EN_CONFIG_ADC_COUNT]);
-EN_COM_STS_T ADC_GetValue(EN_CONFIG_ADC_T adc_id, u16 *value);
+EN_COM_STS_T ADC_ReadAll12bit(u2 raw_array[EN_CONFIG_ADC_COUNT]);
+EN_COM_STS_T ADC_GetValue(EN_CONFIG_ADC_T adc_id, u2 *value);
 
 #ifdef __cplusplus
 }

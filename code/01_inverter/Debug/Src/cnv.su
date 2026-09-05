@@ -1,8 +1,8 @@
-../Src/cnv.c:20:17:cnv_adc_raw_to_mv	16	static
-../Src/cnv.c:25:13:cnv_update_adc_values	16	static
-../Src/cnv.c:38:16:cnv_voltage_to_current_ca	32	static
-../Src/cnv.c:48:6:CNV_Init	4	static
-../Src/cnv.c:64:14:eng_cnv_curr_offset	16	static
-../Src/cnv.c:106:6:CNV_On100us	8	static
-../Src/cnv.c:114:14:eng_cnv_curr	24	static
-../Src/cnv.c:132:14:eng_cnv_get_phase_currents	24	static
+../Src/cnv.c:68:17:cnv_adc_raw_to_mv	16	static
+../Src/cnv.c:80:21:ens_cnv_update_adc_values	16	static
+../Src/cnv.c:103:21:ens_cnv_voltage_to_current_ca	32	static
+../Src/cnv.c:129:21:ens_cnv_curr_offset	16	static
+../Src/cnv.c:179:14:ens_cnv_curr	24	static
+../Src/cnv.c:205:14:eng_cnv_get_phase_currents	24	static
+../Src/cnv.c:224:14:eng_cnv_init	8	static
+../Src/cnv.c:256:14:eng_cnv_100us	8	static

@@ -2,6 +2,7 @@
 #define TASK_H
 
 #include <stdint.h>
+#include "com.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,9 +26,6 @@ extern volatile int32_t g_task_phase_v_current_ca;
 extern volatile int32_t g_task_phase_w_current_ca;
 extern volatile uint8_t g_task_phase_offset_ready;
 
-/* Optional 100us callback; override in user code later. */
-void Task_On100us(void);
-void Task_On1ms(void);
 
 #ifdef __cplusplus
 }

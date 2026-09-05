@@ -8,7 +8,7 @@
 #define DMA1_BASE_ADDR   0x40020000u
 #define NVIC_ISER0_ADDR  0xE000E100u
 
-#define REG32(addr) (*(volatile u32 *)(addr))
+#define REG32(addr) (*(volatile u4 *)(addr))
 
 #define RCC_APB2ENR REG32(RCC_BASE_ADDR + 0x18u)
 #define NVIC_ISER0   REG32(NVIC_ISER0_ADDR)
@@ -67,16 +67,16 @@
 #define ADC_WAIT_TIMEOUT 100000u
 #define DMA1_CH1_IRQ_BIT (1u << 11)
 
-static volatile u16 g_adc_raw_work[EN_CONFIG_ADC_COUNT];
-static volatile u16 g_adc_raw_latest[EN_CONFIG_ADC_COUNT];
-static volatile u8 g_adc_seq_channel[EN_CONFIG_ADC_COUNT];
-static volatile u8 g_adc_active_group;
-static volatile u8 g_adc_busy;
-static volatile u8 g_adc_frame_ready;
-static volatile u8 g_adc_valid;
-static volatile u8 g_adc_sample_index;
+static volatile u2 g_adc_raw_work[EN_CONFIG_ADC_COUNT];
+static volatile u2 g_adc_raw_latest[EN_CONFIG_ADC_COUNT];
+static volatile u1 g_adc_seq_channel[EN_CONFIG_ADC_COUNT];
+static volatile u1 g_adc_active_group;
+static volatile u1 g_adc_busy;
+static volatile u1 g_adc_frame_ready;
+static volatile u1 g_adc_valid;
+static volatile u1 g_adc_sample_index;
 
-static u32 adc_base_from_group(u8 adc_group)
+static u4 adc_base_from_group(u1 adc_group)
 {
     if (adc_group == 1u)
     {
@@ -86,14 +86,14 @@ static u32 adc_base_from_group(u8 adc_group)
     return ADC1_BASE_ADDR;
 }
 
-static void adc_set_channel_sample_time(u32 adc_base, u8 channel, u32 sample_code)
+static void adc_set_channel_sample_time(u4 adc_base, u1 channel, u4 sample_code)
 {
-    u32 shift;
-    u32 reg;
+    u4 shift;
+    u4 reg;
 
     if (channel <= 9u)
     {
-        shift = (u32)channel * 3u;
+        shift = (u4)channel * 3u;
         reg = REG32(adc_base + ADC_SMPR2_OFFSET);
         reg &= ~(0x7u << shift);
         reg |= (sample_code << shift);
@@ -101,7 +101,7 @@ static void adc_set_channel_sample_time(u32 adc_base, u8 channel, u32 sample_cod
     }
     else if (channel <= 17u)
     {
-        shift = (u32)(channel - 10u) * 3u;
+        shift = (u4)(channel - 10u) * 3u;
         reg = REG32(adc_base + ADC_SMPR1_OFFSET);
         reg &= ~(0x7u << shift);
         reg |= (sample_code << shift);
@@ -109,30 +109,30 @@ static void adc_set_channel_sample_time(u32 adc_base, u8 channel, u32 sample_cod
     }
 }
 
-static void adc_config_gpio_analog_from_channel(u8 channel)
+static void adc_config_gpio_analog_from_channel(u1 channel)
 {
-    u32 shift;
+    u4 shift;
 
     if (channel <= 7u)
     {
-        shift = (u32)channel * 4u;
+        shift = (u4)channel * 4u;
         GPIOA_CRL &= ~(0xFu << shift);
     }
     else if (channel <= 9u)
     {
-        shift = (u32)(channel - 8u) * 4u;
+        shift = (u4)(channel - 8u) * 4u;
         GPIOB_CRL &= ~(0xFu << shift);
     }
     else if ((channel >= 10u) && (channel <= 15u))
     {
-        shift = (u32)(channel - 8u) * 4u;
+        shift = (u4)(channel - 8u) * 4u;
         GPIOA_CRH &= ~(0xFu << shift);
     }
 }
 
-static void adc_calibrate(u32 adc_base)
+static void adc_calibrate(u4 adc_base)
 {
-    u32 wait;
+    u4 wait;
 
     REG32(adc_base + ADC_CR2_OFFSET) |= ADC_CR2_ADON;
 
@@ -151,39 +151,39 @@ static void adc_calibrate(u32 adc_base)
     }
 }
 
-static void adc_config_sequence(u32 adc_base, const ST_INVERTER_CONFIG *cfg)
+static void adc_config_sequence(u4 adc_base, const ST_INVERTER_CONFIG *cfg)
 {
-    u32 sqr3;
-    u8 i;
+    u4 sqr3;
+    u1 i;
 
     sqr3 = 0u;
-    for (i = 0u; i < (u8)EN_CONFIG_ADC_COUNT; ++i)
+    for (i = 0u; i < (u1)EN_CONFIG_ADC_COUNT; ++i)
     {
-        g_adc_seq_channel[i] = cfg->stt_adc[i].u8t_adc_pin;
-        sqr3 |= ((u32)g_adc_seq_channel[i] & 0x1Fu) << (5u * i);
+        g_adc_seq_channel[i] = cfg->stt_adc[i].u1t_adc_pin;
+        sqr3 |= ((u4)g_adc_seq_channel[i] & 0x1Fu) << (5u * i);
     }
 
     REG32(adc_base + ADC_SQR1_OFFSET) &= ~(0xFu << 20);
-    REG32(adc_base + ADC_SQR1_OFFSET) |= ((u32)EN_CONFIG_ADC_COUNT - 1u) << 20;
+    REG32(adc_base + ADC_SQR1_OFFSET) |= ((u4)EN_CONFIG_ADC_COUNT - 1u) << 20;
     REG32(adc_base + ADC_SQR3_OFFSET) = sqr3;
 }
 
 static void adc_copy_latest_frame(void)
 {
-    u8 i;
+    u1 i;
 
-    for (i = 0u; i < (u8)EN_CONFIG_ADC_COUNT; ++i)
+    for (i = 0u; i < (u1)EN_CONFIG_ADC_COUNT; ++i)
     {
         g_adc_raw_latest[i] = g_adc_raw_work[i];
     }
 }
 
-static EN_COM_STS_T adc_read_single_channel(u32 adc_base, u8 channel, u16 *value)
+static EN_COM_STS_T adc_read_single_channel(u4 adc_base, u1 channel, u2 *value)
 {
-    u32 wait;
+    u4 wait;
 
     REG32(adc_base + ADC_SQR1_OFFSET) &= ~(0xFu << 20);
-    REG32(adc_base + ADC_SQR3_OFFSET) = (u32)channel & 0x1Fu;
+    REG32(adc_base + ADC_SQR3_OFFSET) = (u4)channel & 0x1Fu;
 
     REG32(adc_base + ADC_SR_OFFSET) &= ~ADC_SR_EOC;
     REG32(adc_base + ADC_CR2_OFFSET) |= ADC_CR2_ADON;
@@ -201,31 +201,31 @@ static EN_COM_STS_T adc_read_single_channel(u32 adc_base, u8 channel, u16 *value
     }
 
     REG32(adc_base + ADC_SR_OFFSET) &= ~ADC_SR_EOC;
-    *value = (u16)(REG32(adc_base + ADC_DR_OFFSET) & 0x0FFFu);
+    *value = (u2)(REG32(adc_base + ADC_DR_OFFSET) & 0x0FFFu);
     return EN_COM_STS_OK;
 }
 
 void ADC_Init(void)
 {
     const ST_INVERTER_CONFIG *cfg;
-    u8 i;
-    u8 channel;
-    u8 group;
-    u32 adc_base;
+    u1 i;
+    u1 channel;
+    u1 group;
+    u4 adc_base;
 
     RCC_APB2ENR |= (RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_ADC1EN | RCC_APB2ENR_ADC2EN);
 
     cfg = Config_Get();
-    g_adc_active_group = cfg->stt_adc[0].u8t_adc_group;
+    g_adc_active_group = cfg->stt_adc[0].u1t_adc_group;
     g_adc_busy = 0u;
     g_adc_frame_ready = 0u;
     g_adc_valid = 1u;
     g_adc_sample_index = 0u;
 
-    for (i = 0u; i < (u8)EN_CONFIG_ADC_COUNT; ++i)
+    for (i = 0u; i < (u1)EN_CONFIG_ADC_COUNT; ++i)
     {
-        channel = cfg->stt_adc[i].u8t_adc_pin;
-        group = cfg->stt_adc[i].u8t_adc_group;
+        channel = cfg->stt_adc[i].u1t_adc_pin;
+        group = cfg->stt_adc[i].u1t_adc_group;
 
         if (group != g_adc_active_group)
         {
@@ -263,8 +263,8 @@ void ADC_Init(void)
 
 EN_COM_STS_T ADC_TriggerFromPwmCycle(void)
 {
-    u32 adc_base;
-    u8 i;
+    u4 adc_base;
+    u1 i;
 
     if (g_adc_valid == 0u)
     {
@@ -282,10 +282,10 @@ EN_COM_STS_T ADC_TriggerFromPwmCycle(void)
     g_adc_frame_ready = 0u;
     g_adc_sample_index = 0u;
 
-    for (i = 0u; i < (u8)EN_CONFIG_ADC_COUNT; ++i)
+    for (i = 0u; i < (u1)EN_CONFIG_ADC_COUNT; ++i)
     {
         {
-            u16 sample;
+            u2 sample;
 
             if (adc_read_single_channel(adc_base, g_adc_seq_channel[i], &sample) != EN_COM_STS_OK)
             {
@@ -304,9 +304,9 @@ EN_COM_STS_T ADC_TriggerFromPwmCycle(void)
     return EN_COM_STS_OK;
 }
 
-EN_COM_STS_T ADC_ReadAll12bit(u16 raw_array[EN_CONFIG_ADC_COUNT])
+EN_COM_STS_T ADC_ReadAll12bit(u2 raw_array[EN_CONFIG_ADC_COUNT])
 {
-    u8 i;
+    u1 i;
 
     if (raw_array == 0)
     {
@@ -323,7 +323,7 @@ EN_COM_STS_T ADC_ReadAll12bit(u16 raw_array[EN_CONFIG_ADC_COUNT])
         return EN_COM_STS_RUNNING;
     }
 
-    for (i = 0u; i < (u8)EN_CONFIG_ADC_COUNT; ++i)
+    for (i = 0u; i < (u1)EN_CONFIG_ADC_COUNT; ++i)
     {
         raw_array[i] = g_adc_raw_latest[i];
     }
@@ -332,7 +332,7 @@ EN_COM_STS_T ADC_ReadAll12bit(u16 raw_array[EN_CONFIG_ADC_COUNT])
     return EN_COM_STS_OK;
 }
 
-EN_COM_STS_T ADC_GetValue(EN_CONFIG_ADC_T adc_id, u16 *value)
+EN_COM_STS_T ADC_GetValue(EN_CONFIG_ADC_T adc_id, u2 *value)
 {
     if (value == 0)
     {
@@ -361,7 +361,7 @@ EN_COM_STS_T ADC_GetValue(EN_CONFIG_ADC_T adc_id, u16 *value)
 
 void ADC1_2_IRQHandler(void)
 {
-    u32 adc_base;
+    u4 adc_base;
 
     if ((g_adc_valid == 0u) || (g_adc_busy == 0u))
     {
@@ -376,9 +376,9 @@ void ADC1_2_IRQHandler(void)
     }
 
     REG32(adc_base + ADC_SR_OFFSET) &= ~ADC_SR_EOC;
-    g_adc_raw_work[g_adc_sample_index] = (u16)(REG32(adc_base + ADC_DR_OFFSET) & 0x0FFFu);
+    g_adc_raw_work[g_adc_sample_index] = (u2)(REG32(adc_base + ADC_DR_OFFSET) & 0x0FFFu);
 
-    if (g_adc_sample_index + 1u < (u8)EN_CONFIG_ADC_COUNT)
+    if (g_adc_sample_index + 1u < (u1)EN_CONFIG_ADC_COUNT)
     {
         g_adc_sample_index++;
         return;
