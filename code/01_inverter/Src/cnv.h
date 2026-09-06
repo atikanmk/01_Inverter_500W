@@ -36,9 +36,12 @@ extern "C" {
 /************************************
  * FUNCTION PROTOTYPES
  ************************************/
-EN_COM_STS_T eng_cnv_init(void);
-EN_COM_STS_T eng_cnv_100us(void);
-EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca);
+extern EN_COM_STS_T eng_cnv_init(void);
+extern EN_COM_STS_T eng_cnv_100us(void);
+extern EN_COM_STS_T eng_cnv_1ms(void);
+extern EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca);
+extern EN_COM_STS_T eng_cnv_get_throttle_perc(u2 *pu2t_throttle_perc);
+
 
 #ifdef __cplusplus
 }

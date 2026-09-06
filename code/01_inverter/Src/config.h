@@ -28,6 +28,8 @@ typedef struct
     u2 u2t_dc_max;
     u2 u2t_phase_max;
     u1 u1t_tps_perc_start;
+    u2 u2t_throttle_min_mv;
+    u2 u2t_throttle_max_mv;
     u4 u4t_curr_ph_v_gain_mv_per_ca;
     u4 u4t_curr_ph_w_gain_mv_per_ca;
     ST_CONFIG_ADC stt_adc[EN_CONFIG_ADC_COUNT];

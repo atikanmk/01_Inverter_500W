@@ -22,6 +22,7 @@
 #include "pwm.h"
 #include "task.h"
 #include "cnv.h"
+#include "drv_mng.h"
 
 #define GPIOA_BASE_ADDR 0x40010800u
 #define REG32(addr) (*(volatile uint32_t *)(addr))
@@ -33,9 +34,6 @@
 #endif
 volatile int cnt;
 volatile uint8_t hall_pattern;
-volatile uint8_t pa1_poll;
-volatile uint8_t pa2_poll;
-volatile uint8_t pa3_poll;
 volatile uint8_t pa123_poll_pattern;
 
 int main(void)
@@ -44,7 +42,8 @@ int main(void)
     Hall_Init();
 	PWM_Init();
 	eng_cnv_init();
-	Task_Init();
+	eng_drv_mng_init();
+	eng_task_init();
     GPIOA_CRL &= ~(0xFu << (3u * 4u));
     GPIOA_CRL |= (0x4u << (3u * 4u));
 
@@ -52,10 +51,6 @@ int main(void)
 	while(1)
 	{
 		cnt++;
-		hall_pattern = Hall_GetPattern();
-		pa1_poll = (uint8_t)((GPIOA_IDR >> 1u) & 0x1u);
-		pa2_poll = (uint8_t)((GPIOA_IDR >> 2u) & 0x1u);
-		pa3_poll = (uint8_t)((GPIOA_IDR >> 3u) & 0x1u);
-		pa123_poll_pattern = (uint8_t)((pa1_poll << 0) | (pa2_poll << 1) | (pa3_poll << 2));
+        eng_task_main();
 	}
 }

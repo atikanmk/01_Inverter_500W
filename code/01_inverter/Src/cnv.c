@@ -22,6 +22,7 @@
  * PRIVATE MACROS AND DEFINES
  ************************************/
 #define CNV_ADC_REFERENCE_MV 3300u
+#define CNV_THROTTLE_MAX_PERC 100u
 
 /************************************
  * PRIVATE TYPEDEFS
@@ -30,34 +31,99 @@
 /************************************
  * STATIC VARIABLES
  ************************************/
-static u2 u16gv_cnv_phase_v_mv;
-static u2 u16gv_cnv_phase_w_mv;
-static u2 u16gv_cnv_phase_v_offset_mv;
-static u2 u16gv_cnv_phase_w_offset_mv;
-static s4 s32gv_cnv_phase_u_current_ca;
+static u2 u2gv_cnv_phase_v_offset_mv;
+static u2 u2gv_cnv_phase_w_offset_mv;
+static s4 s4gv_cnv_phase_u_current_ca;
 static s4 s32gv_cnv_phase_v_current_ca;
 static s4 s32gv_cnv_phase_w_current_ca;
 static u4 u32gv_cnv_phase_v_offset_sum_mv;
 static u4 u32gv_cnv_phase_w_offset_sum_mv;
 static u2 u16gv_cnv_offset_sample_count;
 static u1 u8gv_cnv_offset_ready;
+static u2 u2gv_cnv_throttle_perc;
+static u2 u2sv_cnv_adc_mv[EN_CONFIG_ADC_COUNT];
 
 /************************************
  * GLOBAL VARIABLES
  ************************************/
 
 /************************************
- * STATIC FUNCTION PROTOTYPES
+ * FUNCTION PROTOTYPES
  ************************************/
-static uint16_t cnv_adc_raw_to_mv(uint16_t raw_value);
+static EN_COM_STS_T cnv_adc_raw_to_mv(uint16_t raw_value, u2 * pu2t_mv);
 static EN_COM_STS_T ens_cnv_update_adc_values(void);
 static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u4 u32t_delta_mv, u4 u32t_gain_mv_per_ca,s4* s32t_out);
 static EN_COM_STS_T ens_cnv_curr_offset(void);
 static EN_COM_STS_T ens_cnv_curr(void);
+static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void);
 
 /************************************
- * STATIC FUNCTIONS
+ * FUNCTIONS
  ************************************/
+ /**
+ * @fn     eng_cnv_init
+ * @id     CNV-007
+ * @brief  Initialize CNV module and calibrate current sensor offset
+ * @param  None
+ * @return EN_COM_STS_OK
+ */
+extern EN_COM_STS_T eng_cnv_init(void)
+{
+    /*==========INPUT==========*/
+    /*========OPERATION========*/
+    /*=========OUTPUT==========*/
+    u2gv_cnv_phase_v_offset_mv = 0u;
+    u2gv_cnv_phase_w_offset_mv = 0u;
+    s4gv_cnv_phase_u_current_ca = 0;
+    s32gv_cnv_phase_v_current_ca = 0;
+    s32gv_cnv_phase_w_current_ca = 0;
+    u32gv_cnv_phase_v_offset_sum_mv = 0u;
+    u32gv_cnv_phase_w_offset_sum_mv = 0u;
+    u16gv_cnv_offset_sample_count = 0u;
+    u8gv_cnv_offset_ready = 0u;
+    while(u8gv_cnv_offset_ready == 0u)
+    {
+        ens_cnv_update_adc_values();
+        ens_cnv_curr_offset();
+    }
+
+    return EN_COM_STS_OK;
+}
+
+/**
+ * @fn     eng_cnv_100us
+ * @id     CNV-008
+ * @brief  CNV 100us cyclic task: read ADC and compute phase currents
+ * @param  None
+ * @return EN_COM_STS_OK
+ */
+extern EN_COM_STS_T eng_cnv_100us(void)
+{
+    /*==========INPUT==========*/
+    /*========OPERATION========*/
+    ens_cnv_update_adc_values();
+    ens_cnv_curr();
+    /*=========OUTPUT==========*/
+
+
+    return EN_COM_STS_OK;
+}
+
+
+/**
+ * @fn     eng_cnv_1ms
+ * @id     CNV-009
+ * @brief  CNV 1ms cyclic task: read ADC and compute phase currents
+ * @param  None
+ * @return EN_COM_STS_OK
+ */
+extern EN_COM_STS_T eng_cnv_1ms(void)
+{
+    /*==========INPUT==========*/
+    /*========OPERATION========*/
+    return ens_cnv_throttle_adc_to_perc();
+}
+
 /**
  * @fn     cnv_adc_raw_to_mv
  * @id     CNV-001
@@ -65,29 +131,9 @@ static EN_COM_STS_T ens_cnv_curr(void);
  * @param  raw_value: 12-bit ADC raw value
  * @return Voltage in millivolts
  */
-static uint16_t cnv_adc_raw_to_mv(uint16_t raw_value)
+static EN_COM_STS_T cnv_adc_raw_to_mv(uint16_t raw_value, u2 * pu2t_mv)
 {
-    return (uint16_t)(((uint32_t)raw_value * CNV_ADC_REFERENCE_MV) / ADC_RAW_MAX_12BIT);
-}
-
-/**
- * @fn     ens_cnv_update_adc_values
- * @id     CNV-002
- * @brief  Read ADC and update phase voltage raw values
- * @param  None
- * @return EN_COM_STS_OK
- */
-static EN_COM_STS_T ens_cnv_update_adc_values(void)
-{
-    u2 raw_array[EN_CONFIG_ADC_COUNT];
-    /*==========INPUT==========*/
-    /*========OPERATION========*/
-    if (ADC_ReadAll12bit(raw_array) == EN_COM_STS_OK)
-    {
-    /*=========OUTPUT==========*/
-        u16gv_cnv_phase_v_mv = cnv_adc_raw_to_mv(raw_array[EN_CONFIG_ADC_IV]);
-        u16gv_cnv_phase_w_mv = cnv_adc_raw_to_mv(raw_array[EN_CONFIG_ADC_IW]);
-    }
+    *pu2t_mv = (uint16_t)(((uint32_t)raw_value * CNV_ADC_REFERENCE_MV) / ADC_RAW_MAX_12BIT);
 
     return EN_COM_STS_OK;
 }
@@ -135,14 +181,14 @@ static EN_COM_STS_T ens_cnv_curr_offset(void)
     /*========OPERATION========*/
     if (u8gv_cnv_offset_ready == 0u)
     {
-        u32gv_cnv_phase_v_offset_sum_mv += u16gv_cnv_phase_v_mv;
-        u32gv_cnv_phase_w_offset_sum_mv += u16gv_cnv_phase_w_mv;
+        u32gv_cnv_phase_v_offset_sum_mv += u2sv_cnv_adc_mv[EN_CONFIG_ADC_IV];
+        u32gv_cnv_phase_w_offset_sum_mv += u2sv_cnv_adc_mv[EN_CONFIG_ADC_IW];
         u16gv_cnv_offset_sample_count++;
 
         if (u16gv_cnv_offset_sample_count >= CNV_OFFSET_SAMPLE_COUNT)
         {
-            u16gv_cnv_phase_v_offset_mv = (u2)(u32gv_cnv_phase_v_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
-            u16gv_cnv_phase_w_offset_mv = (u2)(u32gv_cnv_phase_w_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
+            u2gv_cnv_phase_v_offset_mv = (u2)(u32gv_cnv_phase_v_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
+            u2gv_cnv_phase_w_offset_mv = (u2)(u32gv_cnv_phase_w_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
             u8gv_cnv_offset_ready = 1u;
             u32gv_cnv_phase_v_offset_sum_mv = 0;
             u32gv_cnv_phase_w_offset_sum_mv = 0;
@@ -184,12 +230,12 @@ EN_COM_STS_T ens_cnv_curr(void)
 
     cfg = Config_Get();
 
-    phase_v_delta_mv = (s4)u16gv_cnv_phase_v_mv - (s4)u16gv_cnv_phase_v_offset_mv;
-    phase_w_delta_mv = (s4)u16gv_cnv_phase_w_mv - (s4)u16gv_cnv_phase_w_offset_mv;
+    phase_v_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IV] - (s4)u2gv_cnv_phase_v_offset_mv;
+    phase_w_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IW] - (s4)u2gv_cnv_phase_w_offset_mv;
 
     ens_cnv_voltage_to_current_ca(phase_v_delta_mv, cfg->u4t_curr_ph_v_gain_mv_per_ca, &s32gv_cnv_phase_v_current_ca);
     ens_cnv_voltage_to_current_ca(phase_w_delta_mv, cfg->u4t_curr_ph_w_gain_mv_per_ca, &s32gv_cnv_phase_w_current_ca);
-    s32gv_cnv_phase_u_current_ca = -(s32gv_cnv_phase_v_current_ca + s32gv_cnv_phase_w_current_ca);
+    s4gv_cnv_phase_u_current_ca = -(s32gv_cnv_phase_v_current_ca + s32gv_cnv_phase_w_current_ca);
     return EN_COM_STS_OK;
 }
 
@@ -202,65 +248,93 @@ EN_COM_STS_T ens_cnv_curr(void)
  * @param  phase_w_ca: Pointer to store phase W current in centi amperes
  * @return EN_COM_STS_OK
  */
-EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca)
+extern EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca)
 {
-    *ps4t_phase_u_ca = s32gv_cnv_phase_u_current_ca;
+    *ps4t_phase_u_ca = s4gv_cnv_phase_u_current_ca;
     *ps4t_phase_v_ca = s32gv_cnv_phase_v_current_ca;
     *ps4t_phase_w_ca = s32gv_cnv_phase_w_current_ca;
 
     return EN_COM_STS_OK;
 }
 
-/************************************
- * GLOBAL FUNCTIONS
- ************************************/
 /**
- * @fn     eng_cnv_init
- * @id     CNV-007
- * @brief  Initialize CNV module and calibrate current sensor offset
- * @param  None
- * @return EN_COM_STS_OK
+ * @fn     eng_cnv_get_throttle_perc
+ * @id     CNV-010
+ * @brief  Get the throttle position in percent
+ * @param  pu2t_throttle_perc: Pointer to store throttle position from 0 to 100 percent (u2)
+ * @return Throttle position read status
  */
-EN_COM_STS_T eng_cnv_init(void)
+extern EN_COM_STS_T eng_cnv_get_throttle_perc(u2 *pu2t_throttle_perc)
 {
-    /*==========INPUT==========*/
-    /*========OPERATION========*/
-    /*=========OUTPUT==========*/
-    u16gv_cnv_phase_v_mv = 0u;
-    u16gv_cnv_phase_w_mv = 0u;
-    u16gv_cnv_phase_v_offset_mv = 0u;
-    u16gv_cnv_phase_w_offset_mv = 0u;
-    s32gv_cnv_phase_u_current_ca = 0;
-    s32gv_cnv_phase_v_current_ca = 0;
-    s32gv_cnv_phase_w_current_ca = 0;
-    u32gv_cnv_phase_v_offset_sum_mv = 0u;
-    u32gv_cnv_phase_w_offset_sum_mv = 0u;
-    u16gv_cnv_offset_sample_count = 0u;
-    u8gv_cnv_offset_ready = 0u;
-    while(u8gv_cnv_offset_ready == 0u)
+    if (pu2t_throttle_perc == NULL)
     {
-        ens_cnv_update_adc_values();
-        ens_cnv_curr_offset();
+        return EN_COM_STS_ERR;
     }
 
+    *pu2t_throttle_perc = u2gv_cnv_throttle_perc;
+
     return EN_COM_STS_OK;
 }
 
 /**
- * @fn     eng_cnv_100us
- * @id     CNV-008
- * @brief  CNV 100us cyclic task: read ADC and compute phase currents
- * @param  None
- * @return EN_COM_STS_OK
+ * @fn     ens_cnv_throttle_adc_to_perc
+ * @id     CNV-011
+ * @brief  Map throttle voltage between configured endpoints to 0 to 100 percent
+ * @return Throttle conversion status
  */
-EN_COM_STS_T eng_cnv_100us(void)
+static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void)
 {
+    const ST_INVERTER_CONFIG *pst_config;
+    u2 u2t_throttle_mv;
     /*==========INPUT==========*/
-    /*========OPERATION========*/
-    ens_cnv_update_adc_values();
-    ens_cnv_curr();
-    /*=========OUTPUT==========*/
+    pst_config = Config_Get();
+    u2t_throttle_mv = u2sv_cnv_adc_mv[EN_CONFIG_ADC_TPS];
 
+    if (pst_config->u2t_throttle_max_mv <= pst_config->u2t_throttle_min_mv)
+    {
+        return EN_COM_STS_ERR;
+    }
+
+    /*========OPERATION========*/
+    if (u2t_throttle_mv <= pst_config->u2t_throttle_min_mv)
+    {
+        u2gv_cnv_throttle_perc = 0u;
+    }
+    else if (u2t_throttle_mv >= pst_config->u2t_throttle_max_mv)
+    {
+        u2gv_cnv_throttle_perc = CNV_THROTTLE_MAX_PERC;
+    }
+    else
+    {
+        u2gv_cnv_throttle_perc = (u2)(((u4)(u2t_throttle_mv - pst_config->u2t_throttle_min_mv) * CNV_THROTTLE_MAX_PERC) /
+                                      (pst_config->u2t_throttle_max_mv - pst_config->u2t_throttle_min_mv));
+    }
+    /*=========OUTPUT==========*/
 
     return EN_COM_STS_OK;
 }
+
+/**
+ * @fn     ens_cnv_update_adc_values
+ * @id     CNV-009
+ * @brief  Update ADC values and compute phase currents
+ * @param  None
+ * @return EN_COM_STS_OK
+ */
+static EN_COM_STS_T ens_cnv_update_adc_values(void)
+{
+    u1 u1t_adc_cnt;
+    u2 u2t_adc_raw;
+    /*==========INPUT==========*/
+    /*========OPERATION========*/
+    for (u1t_adc_cnt = 0u; u1t_adc_cnt < EN_CONFIG_ADC_COUNT; u1t_adc_cnt++)
+    {
+        ADC_GetValue(u1t_adc_cnt,&u2t_adc_raw);
+        cnv_adc_raw_to_mv(u2t_adc_raw, &u2sv_cnv_adc_mv[u1t_adc_cnt]);
+    }
+
+    /*=========OUTPUT==========*/
+
+    return EN_COM_STS_OK;
+}
+

@@ -2,6 +2,7 @@
 #define PWM_H
 
 #include <stdint.h>
+#include "com.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,8 +21,8 @@ extern "C" {
  * UH: PA8, UL: PB13, VH: PA9, VL: PB14, WH: PA10, WL: PB15
  */
 void PWM_Init(void);
-void PWM_SetDutyUVW(uint16_t duty_u, uint16_t duty_v, uint16_t duty_w);
-void PWM_On100us(void);
+void eng_pwm_set_duty(uint16_t duty_u, uint16_t duty_v, uint16_t duty_w);
+void vdg_pwm_on_100_us(void);
 void PWM_EnableOutput(void);
 void PWM_DisableOutput(void);
 
