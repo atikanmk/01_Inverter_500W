@@ -215,7 +215,7 @@ void ADC_Init(void)
 
     RCC_APB2ENR |= (RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_ADC1EN | RCC_APB2ENR_ADC2EN);
 
-    cfg = Config_Get();
+    cfg = config_get();
     g_adc_active_group = cfg->stt_adc[0].u1t_adc_group;
     g_adc_busy = 0u;
     g_adc_frame_ready = 0u;

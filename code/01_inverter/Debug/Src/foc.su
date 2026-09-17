@@ -1,4 +1,8 @@
-../Src/foc.c:71:14:eng_foc_init	4	static
-../Src/foc.c:96:4:u16g_foc_main	72	static
-../Src/foc.c:131:14:eng_foc_park_transform	48	static
-../Src/foc.c:151:14:eng_foc_inverse_park_transform	48	static
+../Src/foc.c:83:14:eng_foc_init	0	static
+../Src/foc.c:182:14:eng_foc_curr_ref	0	static
+../Src/foc.c:203:14:eng_foc_curr_pi_cal	12	static
+../Src/foc.c:261:14:eng_foc_park_transform	32	static
+../Src/foc.c:291:14:eng_foc_clarke_transform	16	static
+../Src/foc.c:314:14:eng_foc_inverse_park_transform	32	static
+../Src/foc.c:345:14:eng_foc_svm	32	static
+../Src/foc.c:111:14:eng_foc_main	80	static

@@ -1,0 +1,80 @@
+23:30:02 **** Build of configuration Debug for project 01_inverter ****
+make -j8 all 
+arm-none-eabi-gcc -mcpu=cortex-m3 -g3 -DDEBUG -c -x assembler-with-cpp -MMD -MP -MF"Startup/startup_stm32f103c8tx.d" -MT"Startup/startup_stm32f103c8tx.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Startup/startup_stm32f103c8tx.o" "../Startup/startup_stm32f103c8tx.s"
+arm-none-eabi-gcc "../Src/adc.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/adc.d" -MT"Src/adc.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/adc.o"
+arm-none-eabi-gcc "../Src/cnv.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/cnv.d" -MT"Src/cnv.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/cnv.o"
+arm-none-eabi-gcc "../Src/com.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/com.d" -MT"Src/com.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/com.o"
+arm-none-eabi-gcc "../Src/config.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/config.d" -MT"Src/config.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/config.o"
+arm-none-eabi-gcc "../Src/drv_mng.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/drv_mng.d" -MT"Src/drv_mng.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/drv_mng.o"
+arm-none-eabi-gcc "../Src/foc.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/foc.d" -MT"Src/foc.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/foc.o"
+arm-none-eabi-gcc "../Src/hall.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/hall.d" -MT"Src/hall.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/hall.o"
+arm-none-eabi-gcc "../Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/main.d" -MT"Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/main.o"
+arm-none-eabi-gcc "../Src/pwm.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/pwm.d" -MT"Src/pwm.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/pwm.o"
+arm-none-eabi-gcc "../Src/syscalls.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/syscalls.d" -MT"Src/syscalls.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/syscalls.o"
+../Src/hall.c:99:17: warning: 'hall_sector_to_angle' defined but not used [-Wunused-function]
+   99 | static uint16_t hall_sector_to_angle(uint8_t sector)
+      |                 ^~~~~~~~~~~~~~~~~~~~
+../Src/foc.c: In function 'eng_foc_main':
+../Src/foc.c:130:12: warning: unused variable 's4t_trq' [-Wunused-variable]
+  130 |         s4 s4t_trq = 0;
+      |            ^~~~~~~
+../Src/foc.c:157:27: warning: 's4t_iq_ref_ca' is used uninitialized [-Wuninitialized]
+  157 |         s4g_foc_iq_ref_ca = s4t_iq_ref_ca;
+      |         ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+../Src/foc.c:113:12: note: 's4t_iq_ref_ca' was declared here
+  113 |         s4 s4t_iq_ref_ca;
+      |            ^~~~~~~~~~~~~
+../Src/foc.c:158:27: warning: 's4t_id_ref_ca' is used uninitialized [-Wuninitialized]
+  158 |         s4g_foc_id_ref_ca = s4t_id_ref_ca;
+      |         ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+../Src/foc.c:114:12: note: 's4t_id_ref_ca' was declared here
+  114 |         s4 s4t_id_ref_ca;
+      |            ^~~~~~~~~~~~~
+arm-none-eabi-gcc "../Src/sysmem.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/sysmem.d" -MT"Src/sysmem.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/sysmem.o"
+arm-none-eabi-gcc "../Src/task.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DSTM32 -DSTM32F1 -DSTM32F103C8Tx -c -I../Inc -Og -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Src/task.d" -MT"Src/task.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Src/task.o"
+arm-none-eabi-gcc -o "01_inverter.elf" @"objects.list"   -mcpu=cortex-m3 -T"D:\Work\2026\Inverter\01_Inverter_500W\code\01_inverter\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="01_inverter.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: 01_inverter.elf
+ 
+arm-none-eabi-size  01_inverter.elf 
+arm-none-eabi-objdump -h -S 01_inverter.elf  > "01_inverter.list"
+   text	   data	    bss	    dec	    hex	filename
+  13812	      0	   1872	  15684	   3d44	01_inverter.elf
+Finished building: default.size.stdout
+ 
+Finished building: 01_inverter.list
+ 
+23:30:06 **** Incremental Build of configuration Debug for project 01_inverter ****
+make -j8 all 
+arm-none-eabi-size  01_inverter.elf 
+   text	   data	    bss	    dec	    hex	filename
+  13812	      0	   1872	  15684	   3d44	01_inverter.elf
+Finished building: default.size.stdout
+ 
+23:30:54 **** Incremental Build of configuration Debug for project 01_inverter ****
+make -j8 all 
+arm-none-eabi-size  01_inverter.elf 
+   text	   data	    bss	    dec	    hex	filename
+  13812	      0	   1872	  15684	   3d44	01_inverter.elf
+Finished building: default.size.stdout
+ 
+23:37:16 **** Incremental Build of configuration Debug for project 01_inverter ****
+make -j8 all 
+arm-none-eabi-size  01_inverter.elf 
+   text	   data	    bss	    dec	    hex	filename
+  13812	      0	   1872	  15684	   3d44	01_inverter.elf
+Finished building: default.size.stdout
+ 
+23:37:38 **** Incremental Build of configuration Debug for project 01_inverter ****
+make -j8 all 
+arm-none-eabi-size  01_inverter.elf 
+   text	   data	    bss	    dec	    hex	filename
+  13812	      0	   1872	  15684	   3d44	01_inverter.elf
+Finished building: default.size.stdout
+ 
+23:38:21 **** Incremental Build of configuration Debug for project 01_inverter ****
+make -j8 all 
+arm-none-eabi-size  01_inverter.elf 
+   text	   data	    bss	    dec	    hex	filename
+  13812	      0	   1872	  15684	   3d44	01_inverter.elf
+Finished building: default.size.stdout
+ 

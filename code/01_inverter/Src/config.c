@@ -6,19 +6,34 @@ static const ST_INVERTER_CONFIG g_inverter_config = {
     .u2t_dc_max = 1u,
     .u2t_phase_max = 3u,
     .u1t_tps_perc_start = 5u,
-    .u2t_throttle_min_mv = 0u,
+    .u2t_throttle_min_mv = 800u,
     .u2t_throttle_max_mv = 3300u,
+    .u4t_bemf_divider_top_ohm = 300000u,
+    .u4t_bemf_divider_bottom_ohm = 10000u,
     .u4t_curr_ph_v_gain_mv_per_ca = 1200,
     .u4t_curr_ph_w_gain_mv_per_ca = 1200,
+    .u2t_hall_pattern_angle_deg = {
+        [0x0u] = 0u,   /* 000: invalid */
+        [0x1u] = 210u, /* 001: Hall1=1, Hall2=0, Hall3=0 */
+        [0x2u] = 90u, /* 010: Hall1=0, Hall2=1, Hall3=0 */
+        [0x3u] = 150u, /* 011: Hall1=1, Hall2=1, Hall3=0 */
+        [0x4u] = 330u,  /* 100: Hall1=0, Hall2=0, Hall3=1 */
+        [0x5u] = 270u, /* 101: Hall1=1, Hall2=0, Hall3=1 */
+        [0x6u] = 30u,  /* 110: Hall1=0, Hall2=1, Hall3=1 */
+        [0x7u] = 0u    /* 111: invalid */
+    },
     .stt_adc = {
         [EN_CONFIG_ADC_IDC] = {.u1t_adc_group = 0, .u1t_adc_pin = 5}, /* PA5 */
         [EN_CONFIG_ADC_IV] = {.u1t_adc_group = 0, .u1t_adc_pin = 6},  /* PA6 */
         [EN_CONFIG_ADC_IW] = {.u1t_adc_group = 0, .u1t_adc_pin = 7},  /* PA7 */
-        [EN_CONFIG_ADC_TPS] = {.u1t_adc_group = 0, .u1t_adc_pin = 3}  /* PA3 */
+        [EN_CONFIG_ADC_TPS] = {.u1t_adc_group = 0, .u1t_adc_pin = 4}, /* PA4 */
+        [EN_CONFIG_ADC_BEMF_U] = {.u1t_adc_group = 0, .u1t_adc_pin = 0}, /* PA0, ADC1_IN0 */
+        [EN_CONFIG_ADC_BEMF_V] = {.u1t_adc_group = 0, .u1t_adc_pin = 8}, /* PB0, ADC1_IN8 */
+        [EN_CONFIG_ADC_BEMF_W] = {.u1t_adc_group = 0, .u1t_adc_pin = 9}  /* PB1, ADC1_IN9 */
     }
 };
 
-const ST_INVERTER_CONFIG *Config_Get(void)
+const ST_INVERTER_CONFIG *config_get(void)
 {
     return &g_inverter_config;
 }

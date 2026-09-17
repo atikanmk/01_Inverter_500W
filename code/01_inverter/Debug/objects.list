@@ -2,6 +2,7 @@
 "./Src/cnv.o"
 "./Src/com.o"
 "./Src/config.o"
+"./Src/drv_mng.o"
 "./Src/foc.o"
 "./Src/hall.o"
 "./Src/main.o"

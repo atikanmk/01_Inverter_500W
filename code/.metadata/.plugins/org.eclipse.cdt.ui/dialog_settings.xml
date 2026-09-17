@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="completion_proposal_size">
+	</section>
+	<section name="org.eclipse.cdt.ui.text.hover.CMacroExpansionExploration">
+	</section>
+	<section name="RenameInformationPopup">
+	</section>
+	<section name="CRenameRefactoringInputPage">
+	</section>
+	<section name="PDOMSearchPage">
+		<item key="caseSensitive" value="false"/>
+		<item key="searchFlags" value="227191"/>
+		<list key="previousPatterns">
+			<item value="u2g_task_throttle_cpct"/>
+			<item value="eng_cnv_throttle_adc_to_mv_cpct"/>
+			<item value="ADC_GetValue"/>
+			<item value="u16g_foc_main"/>
+			<item value="vdg_pwm_on_100_us"/>
+		</list>
+	</section>
+</section>

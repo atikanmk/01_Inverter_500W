@@ -30,6 +30,7 @@
 #define FOC_CURRENT_PI_KP_Q10        512
 #define FOC_CURRENT_PI_KI_Q10        16
 #define FOC_VOLTAGE_LIMIT_CPCT       10000
+#define FOC_SVM_DUTY_CENTER_CPCT     5000
 
 /************************************
  * PRIVATE TYPEDEFS
@@ -102,12 +103,12 @@ EN_COM_STS_T eng_foc_init(void)
 }
 
 /**
- * @fn     u16g_foc_main
+ * @fn     eng_foc_main
  * @id     FOC-002
  * @brief  Execute one FOC calculation cycle
- * @return Estimated electrical angle in degrees
+ * @return FOC calculation status
  */
-u2 u16g_foc_main(void)
+EN_COM_STS_T eng_foc_main(void)
 {
 	s4 s4t_iq_ref_ca;
 	s4 s4t_id_ref_ca;
@@ -127,20 +128,27 @@ u2 u16g_foc_main(void)
 	s4 s4t_svm_v_cpct = 0;
 	s4 s4t_svm_w_cpct = 0;
 	s4 s4t_trq = 0;
+	u2 s4t_tps_perc = 0;
 
 	/*==========INPUT==========*/
     eng_cnv_get_phase_currents(&s4t_u_ca, &s4t_v_ca, &s4t_w_ca);
 	eng_hall_ang_est(&u2t_angle_est);
+	eng_cnv_get_throttle_perc(&s4t_tps_perc);
 
 	/*==========OPERATION==========*/
 	/* Input calcaulate */
 	eng_foc_clarke_transform(s4t_u_ca, s4t_v_ca, &s4t_alpha_ca, &s4t_beta_ca);
 	eng_foc_park_transform(s4t_alpha_ca, s4t_beta_ca, u2t_angle_est, &s4t_id_feb_ca, &s4t_iq_feb_ca);
-	eng_foc_curr_ref(s4t_trq,s4t_iq_feb_ca,&s4t_iq_ref_ca,&s4t_id_ref_ca);
-	eng_foc_curr_pi_cal(s4t_iq_ref_ca,s4t_id_ref_ca,s4t_iq_feb_ca,s4t_id_feb_ca,&s4t_vq_cpct,&s4t_vd_cpct);
+
+	//eng_foc_curr_ref(s4t_trq,s4t_iq_feb_ca,&s4t_iq_ref_ca,&s4t_id_ref_ca);
+	//eng_foc_curr_pi_cal(s4t_iq_ref_ca,s4t_id_ref_ca,s4t_iq_feb_ca,s4t_id_feb_ca,&s4t_vq_cpct,&s4t_vd_cpct);
+	s4t_vq_cpct = s4t_tps_perc*100;
+	s4t_vd_cpct = 0;
+
 	eng_foc_inverse_park_transform(s4t_vd_cpct,s4t_vq_cpct,u2t_angle_est, &s4t_valpha_cpct, &s4t_vbeta_cpct);
 	eng_foc_svm(s4t_valpha_cpct, s4t_vbeta_cpct, &s4t_svm_u_cpct, &s4t_svm_v_cpct, &s4t_svm_w_cpct);
 	eng_pwm_set_duty(s4t_svm_u_cpct, s4t_svm_v_cpct, s4t_svm_w_cpct);
+
 
 	/*==========OUTPUT==========*/
     s4g_foc_angle_est_deg = u2t_angle_est;
@@ -158,7 +166,7 @@ u2 u16g_foc_main(void)
 	s4g_foc_svm_v_cpct = s4t_svm_v_cpct;
 	s4g_foc_svm_w_cpct = s4t_svm_w_cpct;
 
-	return u2t_angle_est;
+	return EN_COM_STS_OK;
 }
 
 /**
@@ -336,12 +344,43 @@ EN_COM_STS_T eng_foc_inverse_park_transform(s4 s4t_d, s4 s4t_q, u2 u16t_angle_de
  */
 EN_COM_STS_T eng_foc_svm(s4 s4t_valpha, s4 s4t_vbeta, s4 *s4t_svm_u, s4 *s4t_svm_v, s4 *s4t_svm_w)
 {
+	s4 s4t_phase_u;
+	s4 s4t_phase_v;
+	s4 s4t_phase_w;
+	s4 s4t_phase_min;
+	s4 s4t_phase_max;
+	s4 s4t_common_mode;
+
 	/*==========INPUT==========*/
 	/*========OPERATION========*/
 	/* Perform Space Vector Modulation (SVM) */
-	*s4t_svm_u = (s4)(s4t_valpha + 0.5f * s4t_vbeta);
-	*s4t_svm_v = (s4)(-0.5f * s4t_valpha + 0.86602540378f * s4t_vbeta);
-	*s4t_svm_w = (s4)(-0.5f * s4t_valpha - 0.86602540378f * s4t_vbeta);
+	s4t_phase_u = s4t_valpha;
+	s4t_phase_v = (s4)(-0.5f * s4t_valpha + 0.86602540378f * s4t_vbeta);
+	s4t_phase_w = (s4)(-0.5f * s4t_valpha - 0.86602540378f * s4t_vbeta);
+
+	s4t_phase_min = s4t_phase_u;
+	s4t_phase_max = s4t_phase_u;
+	if (s4t_phase_v < s4t_phase_min)
+	{
+		s4t_phase_min = s4t_phase_v;
+	}
+	if (s4t_phase_w < s4t_phase_min)
+	{
+		s4t_phase_min = s4t_phase_w;
+	}
+	if (s4t_phase_v > s4t_phase_max)
+	{
+		s4t_phase_max = s4t_phase_v;
+	}
+	if (s4t_phase_w > s4t_phase_max)
+	{
+		s4t_phase_max = s4t_phase_w;
+	}
+
+	s4t_common_mode = FOC_SVM_DUTY_CENTER_CPCT - ((s4t_phase_max + s4t_phase_min) / 2);
+	*s4t_svm_u = s4t_phase_u + s4t_common_mode;
+	*s4t_svm_v = s4t_phase_v + s4t_common_mode;
+	*s4t_svm_w = s4t_phase_w + s4t_common_mode;
 	/*=========OUTPUT==========*/
 
 	return EN_COM_STS_OK;

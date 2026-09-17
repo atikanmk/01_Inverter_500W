@@ -23,6 +23,7 @@
  ************************************/
 #define CNV_ADC_REFERENCE_MV 3300u
 #define CNV_THROTTLE_MAX_PERC 100u
+#define CNV_THROTTLE_MAX_CPERC 10000u
 
 /************************************
  * PRIVATE TYPEDEFS
@@ -41,6 +42,12 @@ static u4 u32gv_cnv_phase_w_offset_sum_mv;
 static u2 u16gv_cnv_offset_sample_count;
 static u1 u8gv_cnv_offset_ready;
 static u2 u2gv_cnv_throttle_perc;
+static u2 u2gv_cnv_bemf_u_mv;
+static u2 u2gv_cnv_bemf_v_mv;
+static u2 u2gv_cnv_bemf_w_mv;
+static u2 u2gv_cnv_bemf_u_dv;
+static u2 u2gv_cnv_bemf_v_dv;
+static u2 u2gv_cnv_bemf_w_dv;
 static u2 u2sv_cnv_adc_mv[EN_CONFIG_ADC_COUNT];
 
 /************************************
@@ -55,7 +62,9 @@ static EN_COM_STS_T ens_cnv_update_adc_values(void);
 static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u4 u32t_delta_mv, u4 u32t_gain_mv_per_ca,s4* s32t_out);
 static EN_COM_STS_T ens_cnv_curr_offset(void);
 static EN_COM_STS_T ens_cnv_curr(void);
+static EN_COM_STS_T ens_cnv_bemf(void);
 static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void);
+static EN_COM_STS_T ens_cnv_bemf_mv_to_dv(u2 u2t_bemf_sensor_mv, u2 *pu2t_bemf_dv);
 
 /************************************
  * FUNCTIONS
@@ -81,6 +90,12 @@ extern EN_COM_STS_T eng_cnv_init(void)
     u32gv_cnv_phase_w_offset_sum_mv = 0u;
     u16gv_cnv_offset_sample_count = 0u;
     u8gv_cnv_offset_ready = 0u;
+    u2gv_cnv_bemf_u_mv = 0u;
+    u2gv_cnv_bemf_v_mv = 0u;
+    u2gv_cnv_bemf_w_mv = 0u;
+    u2gv_cnv_bemf_u_dv = 0u;
+    u2gv_cnv_bemf_v_dv = 0u;
+    u2gv_cnv_bemf_w_dv = 0u;
     while(u8gv_cnv_offset_ready == 0u)
     {
         ens_cnv_update_adc_values();
@@ -103,12 +118,12 @@ extern EN_COM_STS_T eng_cnv_100us(void)
     /*========OPERATION========*/
     ens_cnv_update_adc_values();
     ens_cnv_curr();
+    ens_cnv_bemf();
     /*=========OUTPUT==========*/
 
 
     return EN_COM_STS_OK;
 }
-
 
 /**
  * @fn     eng_cnv_1ms
@@ -121,7 +136,10 @@ extern EN_COM_STS_T eng_cnv_1ms(void)
 {
     /*==========INPUT==========*/
     /*========OPERATION========*/
-    return ens_cnv_throttle_adc_to_perc();
+    ens_cnv_throttle_adc_to_perc();
+
+    /*=========OUTPUT==========*/
+    return EN_COM_STS_OK;
 }
 
 /**
@@ -228,7 +246,7 @@ EN_COM_STS_T ens_cnv_curr(void)
     int32_t phase_v_delta_mv;
     int32_t phase_w_delta_mv;
 
-    cfg = Config_Get();
+    cfg = config_get();
 
     phase_v_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IV] - (s4)u2gv_cnv_phase_v_offset_mv;
     phase_w_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IW] - (s4)u2gv_cnv_phase_w_offset_mv;
@@ -237,6 +255,28 @@ EN_COM_STS_T ens_cnv_curr(void)
     ens_cnv_voltage_to_current_ca(phase_w_delta_mv, cfg->u4t_curr_ph_w_gain_mv_per_ca, &s32gv_cnv_phase_w_current_ca);
     s4gv_cnv_phase_u_current_ca = -(s32gv_cnv_phase_v_current_ca + s32gv_cnv_phase_w_current_ca);
     return EN_COM_STS_OK;
+}
+
+/**
+ * @fn     ens_cnv_bemf
+ * @id     CNV-015
+ * @brief  Calculate U, V, and W phase BEMF voltages from ADC readings
+ * @return BEMF calculation status
+ */
+static EN_COM_STS_T ens_cnv_bemf(void)
+{
+
+    if (ens_cnv_bemf_mv_to_dv(u2sv_cnv_adc_mv[EN_CONFIG_ADC_BEMF_U], &u2gv_cnv_bemf_u_dv) != EN_COM_STS_OK)
+    {
+        return EN_COM_STS_ERR;
+    }
+
+    if (ens_cnv_bemf_mv_to_dv(u2sv_cnv_adc_mv[EN_CONFIG_ADC_BEMF_V], &u2gv_cnv_bemf_v_dv) != EN_COM_STS_OK)
+    {
+        return EN_COM_STS_ERR;
+    }
+
+    return ens_cnv_bemf_mv_to_dv(u2sv_cnv_adc_mv[EN_CONFIG_ADC_BEMF_W], &u2gv_cnv_bemf_w_dv);
 }
 
 /**
@@ -266,12 +306,84 @@ extern EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_pha
  */
 extern EN_COM_STS_T eng_cnv_get_throttle_perc(u2 *pu2t_throttle_perc)
 {
-    if (pu2t_throttle_perc == NULL)
+    *pu2t_throttle_perc = u2gv_cnv_throttle_perc;
+
+    return EN_COM_STS_OK;
+}
+
+/**
+ * @fn     eng_cnv_get_bemf_mv
+ * @id     CNV-012
+ * @brief  Get U, V, and W phase BEMF voltages sampled every 100 microseconds
+ * @param  pu2t_bemf_u_mv: Pointer to store U-phase BEMF in millivolts (u2)
+ * @param  pu2t_bemf_v_mv: Pointer to store V-phase BEMF in millivolts (u2)
+ * @param  pu2t_bemf_w_mv: Pointer to store W-phase BEMF in millivolts (u2)
+ * @return BEMF voltage read status
+ */
+extern EN_COM_STS_T eng_cnv_get_bemf_mv(u2 *pu2t_bemf_u_mv, u2 *pu2t_bemf_v_mv, u2 *pu2t_bemf_w_mv)
+{
+    if ((pu2t_bemf_u_mv == NULL) || (pu2t_bemf_v_mv == NULL) || (pu2t_bemf_w_mv == NULL))
     {
         return EN_COM_STS_ERR;
     }
 
-    *pu2t_throttle_perc = u2gv_cnv_throttle_perc;
+    *pu2t_bemf_u_mv = u2gv_cnv_bemf_u_mv;
+    *pu2t_bemf_v_mv = u2gv_cnv_bemf_v_mv;
+    *pu2t_bemf_w_mv = u2gv_cnv_bemf_w_mv;
+
+    return EN_COM_STS_OK;
+}
+
+/**
+ * @fn     eng_cnv_get_bemf_dv
+ * @id     CNV-013
+ * @brief  Get U, V, and W phase BEMF voltages before the resistor divider
+ * @param  pu2t_bemf_u_dv: Pointer to store U-phase BEMF in deci-volts (u2)
+ * @param  pu2t_bemf_v_dv: Pointer to store V-phase BEMF in deci-volts (u2)
+ * @param  pu2t_bemf_w_dv: Pointer to store W-phase BEMF in deci-volts (u2)
+ * @return BEMF voltage read status
+ */
+extern EN_COM_STS_T eng_cnv_get_bemf_dv(u2 *pu2t_bemf_u_dv, u2 *pu2t_bemf_v_dv, u2 *pu2t_bemf_w_dv)
+{
+    if ((pu2t_bemf_u_dv == NULL) || (pu2t_bemf_v_dv == NULL) || (pu2t_bemf_w_dv == NULL))
+    {
+        return EN_COM_STS_ERR;
+    }
+
+    *pu2t_bemf_u_dv = u2gv_cnv_bemf_u_dv;
+    *pu2t_bemf_v_dv = u2gv_cnv_bemf_v_dv;
+    *pu2t_bemf_w_dv = u2gv_cnv_bemf_w_dv;
+
+    return EN_COM_STS_OK;
+}
+
+/**
+ * @fn     ens_cnv_bemf_mv_to_dv
+ * @id     CNV-014
+ * @brief  Convert BEMF voltage after the resistor divider to source deci-volts
+ * @param  u2t_bemf_sensor_mv: BEMF sensor voltage at the ADC pin in millivolts (u2)
+ * @param  pu2t_bemf_dv: Pointer to store BEMF source voltage in deci-volts (u2)
+ * @return BEMF conversion status
+ */
+static EN_COM_STS_T ens_cnv_bemf_mv_to_dv(u2 u2t_bemf_sensor_mv, u2 *pu2t_bemf_dv)
+{
+    const ST_INVERTER_CONFIG *pst_config;
+    u4 u4t_divider_total_ohm;
+
+    if (pu2t_bemf_dv == NULL)
+    {
+        return EN_COM_STS_ERR;
+    }
+
+    pst_config = config_get();
+    if (pst_config->u4t_bemf_divider_bottom_ohm == 0u)
+    {
+        return EN_COM_STS_ERR;
+    }
+
+    u4t_divider_total_ohm = pst_config->u4t_bemf_divider_top_ohm + pst_config->u4t_bemf_divider_bottom_ohm;
+    *pu2t_bemf_dv = (u2)(((u4)u2t_bemf_sensor_mv * u4t_divider_total_ohm) /
+                          (pst_config->u4t_bemf_divider_bottom_ohm * 100u));
 
     return EN_COM_STS_OK;
 }
@@ -284,10 +396,12 @@ extern EN_COM_STS_T eng_cnv_get_throttle_perc(u2 *pu2t_throttle_perc)
  */
 static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void)
 {
+	static u2 u2s_throttle_centi_perc = 0;
     const ST_INVERTER_CONFIG *pst_config;
     u2 u2t_throttle_mv;
+    u2 u2t_throttle_cperc;
     /*==========INPUT==========*/
-    pst_config = Config_Get();
+    pst_config = config_get();
     u2t_throttle_mv = u2sv_cnv_adc_mv[EN_CONFIG_ADC_TPS];
 
     if (pst_config->u2t_throttle_max_mv <= pst_config->u2t_throttle_min_mv)
@@ -298,19 +412,21 @@ static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void)
     /*========OPERATION========*/
     if (u2t_throttle_mv <= pst_config->u2t_throttle_min_mv)
     {
-        u2gv_cnv_throttle_perc = 0u;
+    	u2t_throttle_cperc = 0u;
     }
     else if (u2t_throttle_mv >= pst_config->u2t_throttle_max_mv)
     {
-        u2gv_cnv_throttle_perc = CNV_THROTTLE_MAX_PERC;
+    	u2t_throttle_cperc = CNV_THROTTLE_MAX_CPERC;
     }
     else
     {
-        u2gv_cnv_throttle_perc = (u2)(((u4)(u2t_throttle_mv - pst_config->u2t_throttle_min_mv) * CNV_THROTTLE_MAX_PERC) /
-                                      (pst_config->u2t_throttle_max_mv - pst_config->u2t_throttle_min_mv));
+    	u2t_throttle_cperc = (u2)(((u4)(u2t_throttle_mv - pst_config->u2t_throttle_min_mv) * CNV_THROTTLE_MAX_CPERC) /
+                                      (u4)(pst_config->u2t_throttle_max_mv - pst_config->u2t_throttle_min_mv));
+
+    	u2s_throttle_centi_perc = (u2s_throttle_centi_perc * 0.95) + (u2t_throttle_cperc * 0.05);
     }
     /*=========OUTPUT==========*/
-
+	u2gv_cnv_throttle_perc = u2s_throttle_centi_perc/CNV_THROTTLE_MAX_PERC;
     return EN_COM_STS_OK;
 }
 
@@ -337,4 +453,5 @@ static EN_COM_STS_T ens_cnv_update_adc_values(void)
 
     return EN_COM_STS_OK;
 }
+
 

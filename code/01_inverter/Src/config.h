@@ -14,6 +14,9 @@ typedef enum
     EN_CONFIG_ADC_IV = 1,
     EN_CONFIG_ADC_IW = 2,
     EN_CONFIG_ADC_TPS = 3,
+    EN_CONFIG_ADC_BEMF_U = 4,
+    EN_CONFIG_ADC_BEMF_V = 5,
+    EN_CONFIG_ADC_BEMF_W = 6,
     EN_CONFIG_ADC_COUNT
 } EN_CONFIG_ADC_T;
 typedef struct
@@ -30,12 +33,15 @@ typedef struct
     u1 u1t_tps_perc_start;
     u2 u2t_throttle_min_mv;
     u2 u2t_throttle_max_mv;
+    u4 u4t_bemf_divider_top_ohm;
+    u4 u4t_bemf_divider_bottom_ohm;
     u4 u4t_curr_ph_v_gain_mv_per_ca;
     u4 u4t_curr_ph_w_gain_mv_per_ca;
+    u2 u2t_hall_pattern_angle_deg[8];
     ST_CONFIG_ADC stt_adc[EN_CONFIG_ADC_COUNT];
 } ST_INVERTER_CONFIG;
 
-const ST_INVERTER_CONFIG *Config_Get(void);
+const ST_INVERTER_CONFIG *config_get(void);
 
 #ifdef __cplusplus
 }

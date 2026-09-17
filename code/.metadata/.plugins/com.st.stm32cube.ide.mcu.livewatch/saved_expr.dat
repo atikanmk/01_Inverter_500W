@@ -1,0 +1,10 @@
+u2sv_cnv_adc_mv
+s4g_foc_angle_est_deg
+s4g_foc_iq_ref_ca
+u1g_hall_ch1_state
+u1g_hall_ch2_state
+u1g_hall_ch3_state
+s4g_task_speed_elec_rpm
+u2gv_cnv_throttle_perc
+u2sg_task_div_1ms
+cnt

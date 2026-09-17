@@ -10,7 +10,7 @@ extern "C" {
 
 #define PWM_TIMER_CLOCK_HZ 8000000u
 #define PWM_PERIOD_US      100u
-#define PWM_DUTY_MAX       1000u
+#define PWM_DUTY_MAX       10000u
 #define PWM_DEADTIME_US    4u
 
 /* Output active level configuration: 1 = active high, 0 = active low. */

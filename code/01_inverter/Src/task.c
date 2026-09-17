@@ -17,6 +17,7 @@
 #include "drv_mng.h"
 #include "hall.h"
 #include "pwm.h"
+#include "foc.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -52,7 +53,7 @@
  * STATIC VARIABLES
  ************************************/
 static volatile u4 u4sg_task_tick_100us;
-static u1 u1sg_task_div_1ms;
+static u2 u2sg_task_div_1ms;
 
 /************************************
  * GLOBAL VARIABLES
@@ -94,7 +95,7 @@ EN_COM_STS_T eng_task_init(void)
     TIM2_SR = 0u;
 
     u4sg_task_tick_100us = 0u;
-    u1sg_task_div_1ms = 0u;
+    u2sg_task_div_1ms = 0u;
     s4g_task_speed_elec_rpm = 0;
     s4g_task_speed_mech_rpm = 0;
 
@@ -107,9 +108,9 @@ EN_COM_STS_T eng_task_init(void)
 
 EN_COM_STS_T eng_task_main(void)
 {
-    if (u1sg_task_div_1ms >= TASK_1000_USEC)
+    if (u2sg_task_div_1ms >= TASK_1000_USEC)
     {
-        u1sg_task_div_1ms = 0u;
+        u2sg_task_div_1ms = 0u;
         (void)eng_task_on_1ms();
     }
 
@@ -137,6 +138,11 @@ EN_COM_STS_T eng_task_on_100us(void)
     vdg_pwm_on_100_us();
     (void)ADC_TriggerFromPwmCycle();
     (void)eng_cnv_100us();
+    (void)eng_foc_main();
+    s4g_task_speed_elec_rpm = eng_hall_elec_rpm_est();
+    s4g_task_speed_mech_rpm = eng_hall_mech_rpm_est();
+    (void)eng_cnv_1ms();
+    (void)eng_drv_mng_1ms();
 
     return EN_COM_STS_OK;
 }
@@ -150,10 +156,7 @@ EN_COM_STS_T eng_task_on_100us(void)
 EN_COM_STS_T eng_task_on_1ms(void)
 {
 
-    s4g_task_speed_elec_rpm = Hall_GetElectricalRpm();
-    s4g_task_speed_mech_rpm = Hall_GetMechanicalRpm();
-    (void)eng_cnv_1ms();
-    (void)eng_drv_mng_1ms();
+
 
     return EN_COM_STS_OK;
 }
@@ -173,6 +176,6 @@ void TIM2_IRQHandler(void)
         (void)eng_task_on_100us();
 
         /* count task 1 ms */
-        u1sg_task_div_1ms = u1sg_task_div_1ms + TASK_IRQ_PERIOD;
+        u2sg_task_div_1ms = u2sg_task_div_1ms + TASK_IRQ_PERIOD;
     }
 }

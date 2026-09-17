@@ -50,8 +50,8 @@ uint8_t Hall_GetLevel(uint8_t channel);
 uint8_t Hall_GetPattern(void);
 uint32_t Hall_GetEdgeCount(uint8_t channel);
 EN_COM_STS_T eng_hall_ang_est(u2 *pu16t_angle_deg);
-int32_t Hall_GetElectricalRpm(void);
-int32_t Hall_GetMechanicalRpm(void);
+int32_t eng_hall_elec_rpm_est(void);
+int32_t eng_hall_mech_rpm_est(void);
 
 /* Optional callback; override in user code if needed. */
 void Hall_OnEdge(uint8_t channel, uint8_t level);

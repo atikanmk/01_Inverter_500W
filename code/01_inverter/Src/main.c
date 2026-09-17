@@ -23,6 +23,7 @@
 #include "task.h"
 #include "cnv.h"
 #include "drv_mng.h"
+#include "foc.h"
 
 #define GPIOA_BASE_ADDR 0x40010800u
 #define REG32(addr) (*(volatile uint32_t *)(addr))
@@ -44,6 +45,7 @@ int main(void)
 	eng_cnv_init();
 	eng_drv_mng_init();
 	eng_task_init();
+	eng_foc_init();
     GPIOA_CRL &= ~(0xFu << (3u * 4u));
     GPIOA_CRL |= (0x4u << (3u * 4u));
 

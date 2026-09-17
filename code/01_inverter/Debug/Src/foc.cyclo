@@ -1,4 +1,8 @@
-../Src/foc.c:71:14:eng_foc_init	1
-../Src/foc.c:96:4:u16g_foc_main	1
-../Src/foc.c:131:14:eng_foc_park_transform	1
-../Src/foc.c:151:14:eng_foc_inverse_park_transform	1
+../Src/foc.c:83:14:eng_foc_init	1
+../Src/foc.c:182:14:eng_foc_curr_ref	1
+../Src/foc.c:203:14:eng_foc_curr_pi_cal	7
+../Src/foc.c:261:14:eng_foc_park_transform	1
+../Src/foc.c:291:14:eng_foc_clarke_transform	1
+../Src/foc.c:314:14:eng_foc_inverse_park_transform	1
+../Src/foc.c:345:14:eng_foc_svm	5
+../Src/foc.c:111:14:eng_foc_main	1
