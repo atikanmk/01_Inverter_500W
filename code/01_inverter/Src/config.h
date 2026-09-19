@@ -11,8 +11,8 @@ extern "C" {
 typedef enum
 {
     EN_CONFIG_ADC_IDC = 0,
-    EN_CONFIG_ADC_IV = 1,
-    EN_CONFIG_ADC_IW = 2,
+    EN_CONFIG_ADC_IU = 1,
+    EN_CONFIG_ADC_IV = 2,
     EN_CONFIG_ADC_TPS = 3,
     EN_CONFIG_ADC_BEMF_U = 4,
     EN_CONFIG_ADC_BEMF_V = 5,
@@ -35,8 +35,10 @@ typedef struct
     u2 u2t_throttle_max_mv;
     u4 u4t_bemf_divider_top_ohm;
     u4 u4t_bemf_divider_bottom_ohm;
+    u4 u4t_curr_ph_u_gain_mv_per_ca;
     u4 u4t_curr_ph_v_gain_mv_per_ca;
-    u4 u4t_curr_ph_w_gain_mv_per_ca;
+    s1 s1t_curr_ph_u_direction;
+    s1 s1t_curr_ph_v_direction;
     u2 u2t_hall_pattern_angle_deg[8];
     ST_CONFIG_ADC stt_adc[EN_CONFIG_ADC_COUNT];
 } ST_INVERTER_CONFIG;

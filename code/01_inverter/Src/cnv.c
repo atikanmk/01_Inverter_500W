@@ -32,13 +32,13 @@
 /************************************
  * STATIC VARIABLES
  ************************************/
+static u2 u2gv_cnv_phase_u_offset_mv;
 static u2 u2gv_cnv_phase_v_offset_mv;
-static u2 u2gv_cnv_phase_w_offset_mv;
 static s4 s4gv_cnv_phase_u_current_ca;
-static s4 s32gv_cnv_phase_v_current_ca;
-static s4 s32gv_cnv_phase_w_current_ca;
+static s4 s4gv_cnv_phase_v_current_ca;
+static s4 s4gv_cnv_phase_w_current_ca;
+static u4 u32gv_cnv_phase_u_offset_sum_mv;
 static u4 u32gv_cnv_phase_v_offset_sum_mv;
-static u4 u32gv_cnv_phase_w_offset_sum_mv;
 static u2 u16gv_cnv_offset_sample_count;
 static u1 u8gv_cnv_offset_ready;
 static u2 u2gv_cnv_throttle_perc;
@@ -59,7 +59,7 @@ static u2 u2sv_cnv_adc_mv[EN_CONFIG_ADC_COUNT];
  ************************************/
 static EN_COM_STS_T cnv_adc_raw_to_mv(uint16_t raw_value, u2 * pu2t_mv);
 static EN_COM_STS_T ens_cnv_update_adc_values(void);
-static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u4 u32t_delta_mv, u4 u32t_gain_mv_per_ca,s4* s32t_out);
+static EN_COM_STS_T ens_cnv_voltage_to_current_ca(s4 s4t_delta_mv, u4 u4t_gain_mv_per_ca,s4* ps4t_out);
 static EN_COM_STS_T ens_cnv_curr_offset(void);
 static EN_COM_STS_T ens_cnv_curr(void);
 static EN_COM_STS_T ens_cnv_bemf(void);
@@ -81,13 +81,13 @@ extern EN_COM_STS_T eng_cnv_init(void)
     /*==========INPUT==========*/
     /*========OPERATION========*/
     /*=========OUTPUT==========*/
+    u2gv_cnv_phase_u_offset_mv = 0u;
     u2gv_cnv_phase_v_offset_mv = 0u;
-    u2gv_cnv_phase_w_offset_mv = 0u;
     s4gv_cnv_phase_u_current_ca = 0;
-    s32gv_cnv_phase_v_current_ca = 0;
-    s32gv_cnv_phase_w_current_ca = 0;
+    s4gv_cnv_phase_v_current_ca = 0;
+    s4gv_cnv_phase_w_current_ca = 0;
+    u32gv_cnv_phase_u_offset_sum_mv = 0u;
     u32gv_cnv_phase_v_offset_sum_mv = 0u;
-    u32gv_cnv_phase_w_offset_sum_mv = 0u;
     u16gv_cnv_offset_sample_count = 0u;
     u8gv_cnv_offset_ready = 0u;
     u2gv_cnv_bemf_u_mv = 0u;
@@ -96,11 +96,6 @@ extern EN_COM_STS_T eng_cnv_init(void)
     u2gv_cnv_bemf_u_dv = 0u;
     u2gv_cnv_bemf_v_dv = 0u;
     u2gv_cnv_bemf_w_dv = 0u;
-    while(u8gv_cnv_offset_ready == 0u)
-    {
-        ens_cnv_update_adc_values();
-        ens_cnv_curr_offset();
-    }
 
     return EN_COM_STS_OK;
 }
@@ -116,7 +111,8 @@ extern EN_COM_STS_T eng_cnv_100us(void)
 {
     /*==========INPUT==========*/
     /*========OPERATION========*/
-    ens_cnv_update_adc_values();
+	ens_cnv_update_adc_values();
+    ens_cnv_curr_offset();
     ens_cnv_curr();
     ens_cnv_bemf();
     /*=========OUTPUT==========*/
@@ -164,19 +160,19 @@ static EN_COM_STS_T cnv_adc_raw_to_mv(uint16_t raw_value, u2 * pu2t_mv)
  * @param  u32t_gain_mv_per_ca:  Sensor gain in millivolts per centi ampere (u32)
  * @return Current in centi amperes
  */
-static EN_COM_STS_T ens_cnv_voltage_to_current_ca(u4 u32t_delta_mv, u4 u32t_gain_mv_per_ca,s4* s32t_out)
+static EN_COM_STS_T ens_cnv_voltage_to_current_ca(s4 s4t_delta_mv, u4 u4t_gain_mv_per_ca,s4* ps4t_out)
 {
     EN_COM_STS_T ent_ret;
    /*==========INPUT==========*/
     /*========OPERATION========*/
-    if (u32t_gain_mv_per_ca == 0u)
+    if (u4t_gain_mv_per_ca == 0u)
     {
         ent_ret = EN_COM_STS_ERR;
     }
     else
     {
     /*=========OUTPUT==========*/
-        s32t_out[0] = (s4)((u32t_delta_mv * u32t_gain_mv_per_ca) / 1000u);
+        ps4t_out[0] = (s4)((s4t_delta_mv * (s4)u4t_gain_mv_per_ca) / 1000);
         ent_ret = EN_COM_STS_OK;
     }
 
@@ -199,17 +195,17 @@ static EN_COM_STS_T ens_cnv_curr_offset(void)
     /*========OPERATION========*/
     if (u8gv_cnv_offset_ready == 0u)
     {
+        u32gv_cnv_phase_u_offset_sum_mv += u2sv_cnv_adc_mv[EN_CONFIG_ADC_IU];
         u32gv_cnv_phase_v_offset_sum_mv += u2sv_cnv_adc_mv[EN_CONFIG_ADC_IV];
-        u32gv_cnv_phase_w_offset_sum_mv += u2sv_cnv_adc_mv[EN_CONFIG_ADC_IW];
         u16gv_cnv_offset_sample_count++;
 
         if (u16gv_cnv_offset_sample_count >= CNV_OFFSET_SAMPLE_COUNT)
         {
+            u2gv_cnv_phase_u_offset_mv = (u2)(u32gv_cnv_phase_u_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
             u2gv_cnv_phase_v_offset_mv = (u2)(u32gv_cnv_phase_v_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
-            u2gv_cnv_phase_w_offset_mv = (u2)(u32gv_cnv_phase_w_offset_sum_mv / CNV_OFFSET_SAMPLE_COUNT);
             u8gv_cnv_offset_ready = 1u;
-            u32gv_cnv_phase_v_offset_sum_mv = 0;
-            u32gv_cnv_phase_w_offset_sum_mv = 0;
+            u32gv_cnv_phase_u_offset_sum_mv = 0u;
+            u32gv_cnv_phase_v_offset_sum_mv = 0u;
             u16gv_cnv_offset_sample_count = 0;
 
             ent_status = EN_COM_STS_OK;
@@ -222,8 +218,8 @@ static EN_COM_STS_T ens_cnv_curr_offset(void)
     }
     else
     {
-        u32gv_cnv_phase_v_offset_sum_mv = 0;
-        u32gv_cnv_phase_w_offset_sum_mv = 0;
+        u32gv_cnv_phase_u_offset_sum_mv = 0u;
+        u32gv_cnv_phase_v_offset_sum_mv = 0u;
         u16gv_cnv_offset_sample_count = 0;
 
         ent_status = EN_COM_STS_OK;
@@ -243,17 +239,19 @@ static EN_COM_STS_T ens_cnv_curr_offset(void)
 EN_COM_STS_T ens_cnv_curr(void)
 {
     const ST_INVERTER_CONFIG *cfg;
-    int32_t phase_v_delta_mv;
-    int32_t phase_w_delta_mv;
+    s4 s4t_phase_u_delta_mv;
+    s4 s4t_phase_v_delta_mv;
 
     cfg = config_get();
 
-    phase_v_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IV] - (s4)u2gv_cnv_phase_v_offset_mv;
-    phase_w_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IW] - (s4)u2gv_cnv_phase_w_offset_mv;
+    s4t_phase_u_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IU] - (s4)u2gv_cnv_phase_u_offset_mv;
+    s4t_phase_v_delta_mv = (s4)u2sv_cnv_adc_mv[EN_CONFIG_ADC_IV] - (s4)u2gv_cnv_phase_v_offset_mv;
 
-    ens_cnv_voltage_to_current_ca(phase_v_delta_mv, cfg->u4t_curr_ph_v_gain_mv_per_ca, &s32gv_cnv_phase_v_current_ca);
-    ens_cnv_voltage_to_current_ca(phase_w_delta_mv, cfg->u4t_curr_ph_w_gain_mv_per_ca, &s32gv_cnv_phase_w_current_ca);
-    s4gv_cnv_phase_u_current_ca = -(s32gv_cnv_phase_v_current_ca + s32gv_cnv_phase_w_current_ca);
+    ens_cnv_voltage_to_current_ca(s4t_phase_u_delta_mv, cfg->u4t_curr_ph_u_gain_mv_per_ca, &s4gv_cnv_phase_u_current_ca);
+    ens_cnv_voltage_to_current_ca(s4t_phase_v_delta_mv, cfg->u4t_curr_ph_v_gain_mv_per_ca, &s4gv_cnv_phase_v_current_ca);
+        s4gv_cnv_phase_u_current_ca *= (s4)cfg->s1t_curr_ph_u_direction;
+        s4gv_cnv_phase_v_current_ca *= (s4)cfg->s1t_curr_ph_v_direction;
+    s4gv_cnv_phase_w_current_ca = -(s4gv_cnv_phase_u_current_ca + s4gv_cnv_phase_v_current_ca);
     return EN_COM_STS_OK;
 }
 
@@ -291,8 +289,8 @@ static EN_COM_STS_T ens_cnv_bemf(void)
 extern EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca)
 {
     *ps4t_phase_u_ca = s4gv_cnv_phase_u_current_ca;
-    *ps4t_phase_v_ca = s32gv_cnv_phase_v_current_ca;
-    *ps4t_phase_w_ca = s32gv_cnv_phase_w_current_ca;
+    *ps4t_phase_v_ca = s4gv_cnv_phase_v_current_ca;
+    *ps4t_phase_w_ca = s4gv_cnv_phase_w_current_ca;
 
     return EN_COM_STS_OK;
 }
