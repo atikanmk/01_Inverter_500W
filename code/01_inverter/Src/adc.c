@@ -63,9 +63,15 @@
 #define DMA_CCR_PSIZE_16 (1u << 8)
 #define DMA_CCR_MSIZE_16 (1u << 10)
 
+#define ADC_SMP_7CYCLES  0x1u   /* ~1.2 us @ 8 MHz ADC clk — keep ISR short */
 #define ADC_SMP_55CYCLES 0x5u
-#define ADC_WAIT_TIMEOUT 100000u
+/* Init calibrate can wait longer; ISR must never spin this long. */
+#define ADC_WAIT_TIMEOUT     100000u
+/* ~few us expected; keep fail-fast so 3x timeout still << 100 us. */
+#define ADC_WAIT_TIMEOUT_ISR 120u
 #define DMA1_CH1_IRQ_BIT (1u << 11)
+/* FOC needs IU/IV every 100 us; aux channels round-robin so ISR stays < budget. */
+#define ADC_FOC_CH_COUNT 2u
 
 static volatile u2 g_adc_raw_work[EN_CONFIG_ADC_COUNT];
 static volatile u2 g_adc_raw_latest[EN_CONFIG_ADC_COUNT];
@@ -178,18 +184,20 @@ static void adc_copy_latest_frame(void)
     }
 }
 
-static EN_COM_STS_T adc_read_single_channel(u4 adc_base, u1 channel, u2 *value)
+static EN_COM_STS_T adc_read_single_channel_to(u4 adc_base, u1 channel, u2 *value, u4 timeout)
 {
     u4 wait;
 
+    /* Single conversion: L=0, SQ1=channel */
     REG32(adc_base + ADC_SQR1_OFFSET) &= ~(0xFu << 20);
     REG32(adc_base + ADC_SQR3_OFFSET) = (u4)channel & 0x1Fu;
 
-    REG32(adc_base + ADC_SR_OFFSET) &= ~ADC_SR_EOC;
+    /* rc_w0 clear EOC before start */
+    REG32(adc_base + ADC_SR_OFFSET) = (u4)~ADC_SR_EOC;
     REG32(adc_base + ADC_CR2_OFFSET) |= ADC_CR2_ADON;
     REG32(adc_base + ADC_CR2_OFFSET) |= ADC_CR2_SWSTART;
 
-    wait = ADC_WAIT_TIMEOUT;
+    wait = timeout;
     while (((REG32(adc_base + ADC_SR_OFFSET) & ADC_SR_EOC) == 0u) && (wait > 0u))
     {
         wait--;
@@ -200,9 +208,13 @@ static EN_COM_STS_T adc_read_single_channel(u4 adc_base, u1 channel, u2 *value)
         return EN_COM_STS_ERR;
     }
 
-    REG32(adc_base + ADC_SR_OFFSET) &= ~ADC_SR_EOC;
     *value = (u2)(REG32(adc_base + ADC_DR_OFFSET) & 0x0FFFu);
     return EN_COM_STS_OK;
+}
+
+static EN_COM_STS_T adc_read_single_channel(u4 adc_base, u1 channel, u2 *value)
+{
+    return adc_read_single_channel_to(adc_base, channel, value, ADC_WAIT_TIMEOUT);
 }
 
 void ADC_Init(void)
@@ -233,7 +245,8 @@ void ADC_Init(void)
         }
 
         adc_config_gpio_analog_from_channel(channel);
-        adc_set_channel_sample_time(adc_base_from_group(group), channel, ADC_SMP_55CYCLES);
+        /* Short sample time so 100 us ISR does not overrun. */
+        adc_set_channel_sample_time(adc_base_from_group(group), channel, ADC_SMP_7CYCLES);
         g_adc_raw_work[i] = 0u;
         g_adc_raw_latest[i] = 0u;
     }
@@ -251,20 +264,24 @@ void ADC_Init(void)
     adc_base = adc_base_from_group(g_adc_active_group);
     adc_config_sequence(adc_base, cfg);
 
-    REG32(adc_base + ADC_CR1_OFFSET) = ADC_CR1_SCAN;
+    /* Single-channel software start from ISR (not multi SCAN+DMA). */
+    REG32(adc_base + ADC_CR1_OFFSET) = 0u;
     REG32(adc_base + ADC_CR2_OFFSET) &= ~ADC_CR2_EXTSEL_MASK;
     REG32(adc_base + ADC_CR2_OFFSET) |= ADC_CR2_EXTSEL_SWSTART;
     REG32(adc_base + ADC_CR2_OFFSET) &= ~ADC_CR2_DMA;
     REG32(adc_base + ADC_CR2_OFFSET) |= ADC_CR2_EXTTRIG;
 
     adc_calibrate(adc_base);
-
+    /* Keep ADC powered; ISR only pulses SWSTART. */
+    REG32(adc_base + ADC_CR2_OFFSET) |= ADC_CR2_ADON;
 }
 
 EN_COM_STS_T ADC_TriggerFromPwmCycle(void)
 {
     u4 adc_base;
-    u1 i;
+    u2 sample;
+    u1 aux_id;
+    static u1 s_aux_rr;
 
     if (g_adc_valid == 0u)
     {
@@ -277,24 +294,51 @@ EN_COM_STS_T ADC_TriggerFromPwmCycle(void)
     }
 
     adc_base = adc_base_from_group(g_adc_active_group);
-
     g_adc_busy = 1u;
-    g_adc_frame_ready = 0u;
-    g_adc_sample_index = 0u;
 
-    for (i = 0u; i < (u1)EN_CONFIG_ADC_COUNT; ++i)
+    /*
+     * CRITICAL: never block-read all 7 channels in TIM2.
+     * Old path: 7 x long EOC wait => ISR longer than 100 us forever => main cnt freezes.
+     * Fast path: IU + IV every cycle; one aux (Idc/TPS/BEMF) per cycle round-robin.
+     */
+    if (adc_read_single_channel_to(adc_base, g_adc_seq_channel[EN_CONFIG_ADC_IU],
+                                   &sample, ADC_WAIT_TIMEOUT_ISR) != EN_COM_STS_OK)
     {
-        {
-            u2 sample;
+        g_adc_busy = 0u;
+        return EN_COM_STS_ERR;
+    }
+    g_adc_raw_work[EN_CONFIG_ADC_IU] = sample;
+    g_adc_raw_latest[EN_CONFIG_ADC_IU] = sample;
 
-            if (adc_read_single_channel(adc_base, g_adc_seq_channel[i], &sample) != EN_COM_STS_OK)
-            {
-                g_adc_busy = 0u;
-                return EN_COM_STS_ERR;
-            }
+    if (adc_read_single_channel_to(adc_base, g_adc_seq_channel[EN_CONFIG_ADC_IV],
+                                   &sample, ADC_WAIT_TIMEOUT_ISR) != EN_COM_STS_OK)
+    {
+        g_adc_busy = 0u;
+        return EN_COM_STS_ERR;
+    }
+    g_adc_raw_work[EN_CONFIG_ADC_IV] = sample;
+    g_adc_raw_latest[EN_CONFIG_ADC_IV] = sample;
 
-            g_adc_raw_work[i] = sample;
-        }
+    /* Aux order: IDC, TPS, BEMF_U, BEMF_V, BEMF_W */
+    switch (s_aux_rr)
+    {
+    case 0u: aux_id = (u1)EN_CONFIG_ADC_IDC; break;
+    case 1u: aux_id = (u1)EN_CONFIG_ADC_TPS; break;
+    case 2u: aux_id = (u1)EN_CONFIG_ADC_BEMF_U; break;
+    case 3u: aux_id = (u1)EN_CONFIG_ADC_BEMF_V; break;
+    default: aux_id = (u1)EN_CONFIG_ADC_BEMF_W; break;
+    }
+    s_aux_rr++;
+    if (s_aux_rr > 4u)
+    {
+        s_aux_rr = 0u;
+    }
+
+    if (adc_read_single_channel_to(adc_base, g_adc_seq_channel[aux_id],
+                                   &sample, ADC_WAIT_TIMEOUT_ISR) == EN_COM_STS_OK)
+    {
+        g_adc_raw_work[aux_id] = sample;
+        g_adc_raw_latest[aux_id] = sample;
     }
 
     adc_copy_latest_frame();

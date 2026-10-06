@@ -33,6 +33,7 @@
  * STATIC VARIABLES
  ************************************/
 static u1 u1sg_drv_mng_pwm_enabled;
+static u1 u1sg_drv_mng_throttle_enabled;
 
 /************************************
  * GLOBAL VARIABLES
@@ -54,7 +55,8 @@ static u1 u1sg_drv_mng_pwm_enabled;
 EN_COM_STS_T eng_drv_mng_init(void)
 {
     u1sg_drv_mng_pwm_enabled = 0u;
-    PWM_DisableOutput();
+    u1sg_drv_mng_throttle_enabled = 0u;
+    vdg_pwm_disable_output();
 
     return EN_COM_STS_OK;
 }
@@ -73,20 +75,27 @@ EN_COM_STS_T eng_drv_mng_1ms(void)
     {
         return EN_COM_STS_ERR;
     }
-
-    if ((u2t_throttle_perc > DRV_MNG_THROTTLE_ENABLE_PERC) &&
-        (u1sg_drv_mng_pwm_enabled == 0u))
+    
+    if (u1sg_drv_mng_throttle_enabled == 1u)
     {
-        PWM_EnableOutput();
-        u1sg_drv_mng_pwm_enabled = 1u;
+        if ((u2t_throttle_perc > DRV_MNG_THROTTLE_ENABLE_PERC) &&
+            (u1sg_drv_mng_pwm_enabled == 0u))
+        {
+            vdg_pwm_enable_output();
+            u1sg_drv_mng_pwm_enabled = 1u;
+        }
+        else if ((u2t_throttle_perc < DRV_MNG_THROTTLE_DISABLE_PERC) && (u1sg_drv_mng_pwm_enabled != 0u))
+        {
+            vdg_pwm_disable_output();
+            u1sg_drv_mng_pwm_enabled = 0u;
+        }
     }
-    else if ((u2t_throttle_perc < DRV_MNG_THROTTLE_DISABLE_PERC) &&
-             (s4g_task_speed_mech_rpm == 0) &&
-             (u1sg_drv_mng_pwm_enabled != 0u))
+    else
     {
-        PWM_DisableOutput();
-        u1sg_drv_mng_pwm_enabled = 0u;
+        if (u2t_throttle_perc < DRV_MNG_THROTTLE_DISABLE_PERC) 
+        {
+            u1sg_drv_mng_throttle_enabled = 1u;
+        }
     }
-
     return EN_COM_STS_OK;
 }

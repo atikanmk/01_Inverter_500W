@@ -13,7 +13,7 @@
 #include "cnv.h"
 #include "adc.h"
 #include "config.h"
-
+#include "hall.h"
 /************************************
  * EXTERN VARIABLES
  ************************************/
@@ -49,6 +49,9 @@ static u2 u2gv_cnv_bemf_u_dv;
 static u2 u2gv_cnv_bemf_v_dv;
 static u2 u2gv_cnv_bemf_w_dv;
 static u2 u2sv_cnv_adc_mv[EN_CONFIG_ADC_COUNT];
+static s4 s4g_cnv_speed_elec_rpm;
+static s4 s4g_cnv_speed_mech_rpm;
+static u2 u2s_throttle_centi_perc = 0;
 
 /************************************
  * GLOBAL VARIABLES
@@ -96,6 +99,8 @@ extern EN_COM_STS_T eng_cnv_init(void)
     u2gv_cnv_bemf_u_dv = 0u;
     u2gv_cnv_bemf_v_dv = 0u;
     u2gv_cnv_bemf_w_dv = 0u;
+    s4g_cnv_speed_elec_rpm = 0u;
+    s4g_cnv_speed_mech_rpm = 0u;
 
     return EN_COM_STS_OK;
 }
@@ -133,6 +138,8 @@ extern EN_COM_STS_T eng_cnv_1ms(void)
     /*==========INPUT==========*/
     /*========OPERATION========*/
     ens_cnv_throttle_adc_to_perc();
+    s4g_cnv_speed_elec_rpm = eng_hall_elec_rpm_est();
+    s4g_cnv_speed_mech_rpm = eng_hall_mech_rpm_est();
 
     /*=========OUTPUT==========*/
     return EN_COM_STS_OK;
@@ -249,8 +256,8 @@ EN_COM_STS_T ens_cnv_curr(void)
 
     ens_cnv_voltage_to_current_ca(s4t_phase_u_delta_mv, cfg->u4t_curr_ph_u_gain_mv_per_ca, &s4gv_cnv_phase_u_current_ca);
     ens_cnv_voltage_to_current_ca(s4t_phase_v_delta_mv, cfg->u4t_curr_ph_v_gain_mv_per_ca, &s4gv_cnv_phase_v_current_ca);
-        s4gv_cnv_phase_u_current_ca *= (s4)cfg->s1t_curr_ph_u_direction;
-        s4gv_cnv_phase_v_current_ca *= (s4)cfg->s1t_curr_ph_v_direction;
+    s4gv_cnv_phase_u_current_ca *= (s4)cfg->s1t_curr_ph_u_direction;
+    s4gv_cnv_phase_v_current_ca *= (s4)cfg->s1t_curr_ph_v_direction;
     s4gv_cnv_phase_w_current_ca = -(s4gv_cnv_phase_u_current_ca + s4gv_cnv_phase_v_current_ca);
     return EN_COM_STS_OK;
 }
@@ -305,6 +312,20 @@ extern EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_pha
 extern EN_COM_STS_T eng_cnv_get_throttle_perc(u2 *pu2t_throttle_perc)
 {
     *pu2t_throttle_perc = u2gv_cnv_throttle_perc;
+
+    return EN_COM_STS_OK;
+}
+
+/**
+ * @fn     eng_cnv_get_throttle_perc
+ * @id     CNV-010
+ * @brief  Get the throttle position in centi percent
+ * @param  pu2t_throttle_centi_perc: Pointer to store throttle position from 0 to 10000 centi percent (u2)
+ * @return Throttle position read status
+ */
+extern EN_COM_STS_T eng_cnv_get_throttle_centi_perc(u2 *pu2t_throttle_centi_perc)
+{
+    *pu2t_throttle_centi_perc = u2s_throttle_centi_perc;
 
     return EN_COM_STS_OK;
 }
@@ -394,7 +415,6 @@ static EN_COM_STS_T ens_cnv_bemf_mv_to_dv(u2 u2t_bemf_sensor_mv, u2 *pu2t_bemf_d
  */
 static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void)
 {
-	static u2 u2s_throttle_centi_perc = 0;
     const ST_INVERTER_CONFIG *pst_config;
     u2 u2t_throttle_mv;
     u2 u2t_throttle_cperc;
@@ -402,10 +422,7 @@ static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void)
     pst_config = config_get();
     u2t_throttle_mv = u2sv_cnv_adc_mv[EN_CONFIG_ADC_TPS];
 
-    if (pst_config->u2t_throttle_max_mv <= pst_config->u2t_throttle_min_mv)
-    {
-        return EN_COM_STS_ERR;
-    }
+
 
     /*========OPERATION========*/
     if (u2t_throttle_mv <= pst_config->u2t_throttle_min_mv)
@@ -420,11 +437,13 @@ static EN_COM_STS_T ens_cnv_throttle_adc_to_perc(void)
     {
     	u2t_throttle_cperc = (u2)(((u4)(u2t_throttle_mv - pst_config->u2t_throttle_min_mv) * CNV_THROTTLE_MAX_CPERC) /
                                       (u4)(pst_config->u2t_throttle_max_mv - pst_config->u2t_throttle_min_mv));
-
-    	u2s_throttle_centi_perc = (u2s_throttle_centi_perc * 0.95) + (u2t_throttle_cperc * 0.05);
     }
+
+    /* Always update filter (min/max used to skip and freeze perc). Integer LPF ~0.9/0.1. */
+    u2s_throttle_centi_perc = (u2)((((u4)u2s_throttle_centi_perc * 99u) + (u4)u2t_throttle_cperc) / 100u);
+
     /*=========OUTPUT==========*/
-	u2gv_cnv_throttle_perc = u2s_throttle_centi_perc/CNV_THROTTLE_MAX_PERC;
+	u2gv_cnv_throttle_perc = u2s_throttle_centi_perc / CNV_THROTTLE_MAX_PERC;
     return EN_COM_STS_OK;
 }
 
@@ -452,4 +471,20 @@ static EN_COM_STS_T ens_cnv_update_adc_values(void)
     return EN_COM_STS_OK;
 }
 
+/**
+ * @fn     eng_cnv_get_bemf_dv
+ * @id     CNV-013
+ * @brief  Get U, V, and W phase BEMF voltages before the resistor divider
+ * @param  pu2t_bemf_u_dv: Pointer to store U-phase BEMF in deci-volts (u2)
+ * @return BEMF voltage read status
+ */
+extern EN_COM_STS_T eng_cnv_get_mtr_spd_rpm(s4 * ps4t_spd_rpm)
+{
+	if (ps4t_spd_rpm == 0)
+	{
+		return EN_COM_STS_ERR;
+	}
 
+	ps4t_spd_rpm[0] = s4g_cnv_speed_mech_rpm;
+	return EN_COM_STS_OK;
+}

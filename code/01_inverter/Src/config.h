@@ -39,6 +39,7 @@ typedef struct
     u4 u4t_curr_ph_v_gain_mv_per_ca;
     s1 s1t_curr_ph_u_direction;
     s1 s1t_curr_ph_v_direction;
+        s4 s4t_centi_amp_per_centi_nm_fac100pc;
     u2 u2t_hall_pattern_angle_deg[8];
     ST_CONFIG_ADC stt_adc[EN_CONFIG_ADC_COUNT];
 } ST_INVERTER_CONFIG;

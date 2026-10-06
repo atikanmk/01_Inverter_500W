@@ -1,6 +1,6 @@
-../Src/task.c:79:14:eng_task_init	0	static
-../Src/task.c:109:14:eng_task_main	0	static
-../Src/task.c:125:4:u4g_task_get_tick_100us	0	static
-../Src/task.c:136:14:eng_task_on_100us	8	static
-../Src/task.c:156:14:eng_task_on_1ms	0	static
-../Src/task.c:170:6:TIM2_IRQHandler	8	static
+../Src/task.c:83:14:eng_task_init	16	static
+../Src/task.c:166:4:u4g_task_get_tick_100us	0	static
+../Src/task.c:177:14:eng_task_on_100us	8	static
+../Src/task.c:195:14:eng_task_on_1ms	8	static
+../Src/task.c:114:14:eng_task_main	16	static,ignoring_inline_asm
+../Src/task.c:209:6:TIM2_IRQHandler	8	static

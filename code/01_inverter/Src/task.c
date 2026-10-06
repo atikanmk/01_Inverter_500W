@@ -18,6 +18,7 @@
 #include "hall.h"
 #include "pwm.h"
 #include "foc.h"
+#include "system_clock.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -53,13 +54,16 @@
  * STATIC VARIABLES
  ************************************/
 static volatile u4 u4sg_task_tick_100us;
-static u2 u2sg_task_div_1ms;
+/* Accumulated us from TIM2; eng_task_main() drains 1 ms work in background. */
+static volatile u4 u4sg_task_div_1ms_us;
+/* Main drains ADC/cnv when set by TIM2 (keeps ISR short). */
+static volatile u1 u1sg_task_do_adc_cnv;
+/* Debug: how many times TIM2 nested/overran (UIF already set on entry). */
+volatile u4 u4g_task_isr_overrun;
 
 /************************************
  * GLOBAL VARIABLES
  ************************************/
-volatile s4 s4g_task_speed_elec_rpm;
-volatile s4 s4g_task_speed_mech_rpm;
 
 /************************************
  * FUNCTION PROTOTYPES
@@ -86,7 +90,8 @@ EN_COM_STS_T eng_task_init(void)
     TIM2_CR1 = 0u;
     TIM2_DIER = 0u;
 
-    u4t_psc = (TASK_TIMER_CLOCK_HZ / 1000000u) - 1u;
+    /* Use the clock SystemInit actually achieved (64 or 72 MHz), not a hard 72. */
+    u4t_psc = (SystemTimerClock_Get() / 1000000u) - 1u;
     u4t_arr = TASK_100US_PERIOD_US - 1u;
 
     TIM2_PSC = u4t_psc;
@@ -95,9 +100,9 @@ EN_COM_STS_T eng_task_init(void)
     TIM2_SR = 0u;
 
     u4sg_task_tick_100us = 0u;
-    u2sg_task_div_1ms = 0u;
-    s4g_task_speed_elec_rpm = 0;
-    s4g_task_speed_mech_rpm = 0;
+    u4sg_task_div_1ms_us = 0u;
+    u1sg_task_do_adc_cnv = 0u;
+    u4g_task_isr_overrun = 0u;
 
     TIM2_DIER |= TIM_DIER_UIE;
     NVIC_ISER0 = TIM2_IRQ_BIT;
@@ -108,14 +113,50 @@ EN_COM_STS_T eng_task_init(void)
 
 EN_COM_STS_T eng_task_main(void)
 {
-    if (u2sg_task_div_1ms >= TASK_1000_USEC)
+    u4 u4t_due_slots;
+    u4 u4t_i;
+    u1 u1t_do_adc;
+
+    /*
+     * ADC + current conversion in normal context (not TIM2).
+     * At 8 MHz / heavy -Og, blocking ADC inside 100 us ISR freezes main cnt.
+     */
+    __asm volatile ("cpsid i" ::: "memory");
+    u1t_do_adc = u1sg_task_do_adc_cnv;
+    u1sg_task_do_adc_cnv = 0u;
+    __asm volatile ("cpsie i" ::: "memory");
+
+    if (u1t_do_adc != 0u)
     {
-        u2sg_task_div_1ms = 0u;
+        (void)ADC_TriggerFromPwmCycle();
+        (void)eng_cnv_100us();
+        (void)eng_foc_main();
+    }
+
+    /*
+     * Normal context 1 ms task (not inside TIM2_IRQHandler).
+     * Claim due slots under brief IRQ mask, then run work with IRQ enabled
+     * so FOC/Hall can still preempt a long 1 ms burst.
+     */
+    __asm volatile ("cpsid i" ::: "memory");
+    u4t_due_slots = u4sg_task_div_1ms_us / TASK_1000_USEC;
+    u4sg_task_div_1ms_us -= (u4t_due_slots * TASK_1000_USEC);
+    __asm volatile ("cpsie i" ::: "memory");
+
+    /* Cap catch-up so a long stall does not block main forever. */
+    if (u4t_due_slots > 5u)
+    {
+        u4t_due_slots = 5u;
+    }
+
+    for (u4t_i = 0u; u4t_i < u4t_due_slots; u4t_i++)
+    {
         (void)eng_task_on_1ms();
     }
 
     return EN_COM_STS_OK;
 }
+
 /**
  * @fn     u4g_task_get_tick_100us
  * @id     TASK-002
@@ -135,14 +176,12 @@ u4 u4g_task_get_tick_100us(void)
  */
 EN_COM_STS_T eng_task_on_100us(void)
 {
+    /*
+     * CCR update only. FOC/ADC/cnv run in main.
+     * At the real 8 MHz HSI a full FOC call overruns 100 us (overrun ~= tick).
+     */
     vdg_pwm_on_100_us();
-    (void)ADC_TriggerFromPwmCycle();
-    (void)eng_cnv_100us();
-    (void)eng_foc_main();
-    s4g_task_speed_elec_rpm = eng_hall_elec_rpm_est();
-    s4g_task_speed_mech_rpm = eng_hall_mech_rpm_est();
-    (void)eng_cnv_1ms();
-    (void)eng_drv_mng_1ms();
+    u1sg_task_do_adc_cnv = 1u;
 
     return EN_COM_STS_OK;
 }
@@ -155,8 +194,8 @@ EN_COM_STS_T eng_task_on_100us(void)
  */
 EN_COM_STS_T eng_task_on_1ms(void)
 {
-
-
+    (void)eng_cnv_1ms();
+    (void)eng_drv_mng_1ms();
 
     return EN_COM_STS_OK;
 }
@@ -172,10 +211,20 @@ void TIM2_IRQHandler(void)
     if ((TIM2_SR & TIM_SR_UIF) != 0u)
     {
         TIM2_SR &= ~TIM_SR_UIF;
+
         u4sg_task_tick_100us++;
         (void)eng_task_on_100us();
 
-        /* count task 1 ms */
-        u2sg_task_div_1ms = u2sg_task_div_1ms + TASK_IRQ_PERIOD;
+        /* Timebase only — do not call eng_task_on_1ms() / ADC / FOC here. */
+        u4sg_task_div_1ms_us += TASK_IRQ_PERIOD;
+
+        /* UIF already set again => this ISR took longer than one period. */
+        if ((TIM2_SR & TIM_SR_UIF) != 0u)
+        {
+            u4g_task_isr_overrun++;
+            TIM2_SR &= ~TIM_SR_UIF;
+        }
     }
 }
+
+

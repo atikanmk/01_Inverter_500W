@@ -41,8 +41,10 @@ extern EN_COM_STS_T eng_cnv_100us(void);
 extern EN_COM_STS_T eng_cnv_1ms(void);
 extern EN_COM_STS_T eng_cnv_get_phase_currents(s4 *ps4t_phase_u_ca, s4 *ps4t_phase_v_ca, s4 *ps4t_phase_w_ca);
 extern EN_COM_STS_T eng_cnv_get_throttle_perc(u2 *pu2t_throttle_perc);
+extern EN_COM_STS_T eng_cnv_get_throttle_centi_perc(u2 *pu2t_throttle_centi_perc);
 extern EN_COM_STS_T eng_cnv_get_bemf_mv(u2 *pu2t_bemf_u_mv, u2 *pu2t_bemf_v_mv, u2 *pu2t_bemf_w_mv);
 extern EN_COM_STS_T eng_cnv_get_bemf_dv(u2 *pu2t_bemf_u_dv, u2 *pu2t_bemf_v_dv, u2 *pu2t_bemf_w_dv);
+extern EN_COM_STS_T eng_cnv_get_mtr_spd_rpm(s4 * ps4t_spd_rpm);
 
 
 #ifdef __cplusplus

@@ -21,7 +21,8 @@ extern "C" {
 #endif
 
 #define TASK_100US_PERIOD_US  100u
-#define TASK_TIMER_CLOCK_HZ   8000000u
+/* Must match SystemInit (HSE+PLL 72 MHz). If HSE fails, timers run slow. */
+#define TASK_TIMER_CLOCK_HZ   72000000u
 
 /************************************
  * TYPEDEFS
@@ -30,8 +31,6 @@ extern "C" {
 /************************************
  * EXTERN VARIABLES
  ************************************/
-extern volatile s4 s4g_task_speed_elec_rpm;
-extern volatile s4 s4g_task_speed_mech_rpm;
 
 /************************************
  * FUNCTION PROTOTYPES
@@ -41,6 +40,9 @@ u4 u4g_task_get_tick_100us(void);
 EN_COM_STS_T eng_task_on_100us(void);
 EN_COM_STS_T eng_task_on_1ms(void);
 EN_COM_STS_T eng_task_main(void);
+
+/* Debug: increments if TIM2 period is overrun (watch alongside cnt). */
+extern volatile u4 u4g_task_isr_overrun;
 
 #ifdef __cplusplus
 }

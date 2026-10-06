@@ -9,5 +9,6 @@
 "./Src/pwm.o"
 "./Src/syscalls.o"
 "./Src/sysmem.o"
+"./Src/system_clock.o"
 "./Src/task.o"
 "./Startup/startup_stm32f103c8tx.o"

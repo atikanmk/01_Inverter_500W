@@ -1,8 +1,9 @@
-../Src/pwm.c:118:11:pwm_encode_deadtime_us	5
-../Src/pwm.c:154:11:pwm_limit_duty	2
-../Src/pwm.c:171:11:pwm_duty_to_ccr	2
-../Src/pwm.c:195:6:eng_pwm_set_duty	1
-../Src/pwm.c:208:6:vdg_pwm_on_100_us	1
-../Src/pwm.c:221:6:PWM_EnableOutput	1
-../Src/pwm.c:232:6:PWM_DisableOutput	1
-../Src/pwm.c:243:6:PWM_Init	1
+../Src/pwm.c:155:11:pwm_limit_duty	2
+../Src/pwm.c:172:11:pwm_duty_to_ccr	2
+../Src/pwm.c:119:11:pwm_encode_deadtime_us	5
+../Src/pwm.c:196:6:eng_pwm_set_duty	1
+../Src/pwm.c:209:6:vdg_pwm_on_100_us	1
+../Src/pwm.c:222:6:vdg_pwm_enable_output	1
+../Src/pwm.c:235:6:vdg_pwm_disable_output	1
+../Src/pwm.c:240:4:u1g_pwm_get_pwm_enb_sts	2
+../Src/pwm.c:251:6:eng_pwm_init	1

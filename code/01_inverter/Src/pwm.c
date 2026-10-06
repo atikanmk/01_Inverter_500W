@@ -11,6 +11,7 @@
  * INCLUDES
  ************************************/
 #include "pwm.h"
+#include "system_clock.h"
 
 /************************************
  * EXTERN VARIABLES
@@ -119,7 +120,7 @@ static u1 pwm_encode_deadtime_us(u4 u4t_deadtime_us)
 {
     u4 u4t_ticks;
 
-    u4t_ticks = (PWM_TIMER_CLOCK_HZ / 1000000u) * u4t_deadtime_us;
+    u4t_ticks = (SystemTimerClock_Get() / 1000000u) * u4t_deadtime_us;
 
     if (u4t_ticks <= 127u)
     {
@@ -218,9 +219,11 @@ void vdg_pwm_on_100_us(void)
  * @brief  Enable TIM1 main and complementary PWM outputs
  * @return None
  */
-void PWM_EnableOutput(void)
+void vdg_pwm_enable_output(void)
 {
     TIM1_BDTR |= TIM_BDTR_MOE;
+
+    
 }
 
 /**
@@ -229,9 +232,14 @@ void PWM_EnableOutput(void)
  * @brief  Disable TIM1 main and complementary PWM outputs
  * @return None
  */
-void PWM_DisableOutput(void)
+void vdg_pwm_disable_output(void)
 {
     TIM1_BDTR &= ~TIM_BDTR_MOE;
+}
+
+u1 u1g_pwm_get_pwm_enb_sts(void)
+{
+    return ((TIM1_BDTR & TIM_BDTR_MOE) != 0u) ? 1u : 0u;
 }
 
 /**
@@ -240,7 +248,7 @@ void PWM_DisableOutput(void)
  * @brief  Initialize TIM1 and PWM GPIOs for three phase complementary output
  * @return None
  */
-void PWM_Init(void)
+void eng_pwm_init(void)
 {
     u4 u4t_pin_cfg;
     u4 u4t_period_counts;
@@ -260,7 +268,7 @@ void PWM_Init(void)
     TIM1_CR1 = 0u;
 
     TIM1_PSC = 0u;
-    u4t_period_counts = (PWM_TIMER_CLOCK_HZ / 1000000u) * PWM_PERIOD_US;
+    u4t_period_counts = (SystemTimerClock_Get() / 1000000u) * PWM_PERIOD_US;
     TIM1_ARR = u4t_period_counts - 1u;
 
     /* PWM mode 1 with preload on CH1, CH2, CH3. */

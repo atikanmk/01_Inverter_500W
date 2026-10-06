@@ -1,0 +1,8 @@
+../Src/system_clock.c:49:13:system_clock_pll_off	0	static
+../Src/system_clock.c:60:17:system_clock_wait_flag	0	static
+../Src/system_clock.c:72:17:system_clock_switch_pll	8	static
+../Src/system_clock.c:130:17:system_clock_try_hsi_64	8	static
+../Src/system_clock.c:178:17:system_clock_from_rcc	0	static
+../Src/system_clock.c:149:6:SystemInit	8	static
+../Src/system_clock.c:212:10:SystemCoreClock_Get	8	static
+../Src/system_clock.c:217:10:SystemTimerClock_Get	8	static

@@ -24,6 +24,8 @@
 #include "cnv.h"
 #include "drv_mng.h"
 #include "foc.h"
+#include "system_clock.h"
+#include "com.h"
 
 #define GPIOA_BASE_ADDR 0x40010800u
 #define REG32(addr) (*(volatile uint32_t *)(addr))
@@ -36,12 +38,22 @@
 volatile int cnt;
 volatile uint8_t hall_pattern;
 volatile uint8_t pa123_poll_pattern;
+/* Watch these if cnt freezes: tick must climb; overrun should stay ~0. */
+extern volatile u4 u4g_task_isr_overrun;
+volatile u4 g_dbg_tick_100us;
+volatile u4 g_dbg_isr_overrun;
+volatile u4 g_dbg_core_hz;
+volatile u4 g_dbg_timer_hz;
 
 int main(void)
 {
+    /* SystemInit: HSE*9=72 MHz, else HSI/2*16=64 MHz. */
+    g_dbg_core_hz = SystemCoreClock_Get();
+    g_dbg_timer_hz = SystemTimerClock_Get();
+
     ADC_Init();
     Hall_Init();
-	PWM_Init();
+	eng_pwm_init();
 	eng_cnv_init();
 	eng_drv_mng_init();
 	eng_task_init();
@@ -54,5 +66,7 @@ int main(void)
 	{
 		cnt++;
         eng_task_main();
+        g_dbg_tick_100us = u4g_task_get_tick_100us();
+        g_dbg_isr_overrun = u4g_task_isr_overrun;
 	}
 }

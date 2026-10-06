@@ -1,6 +1,7 @@
 #include "hall.h"
 
 #include "config.h"
+#include "system_clock.h"
 
 #include <stdint.h>
 
@@ -19,6 +20,7 @@
 
 #define GPIOA_CRL REG32(GPIOA_BASE_ADDR + 0x00u)
 #define GPIOA_IDR REG32(GPIOA_BASE_ADDR + 0x08u)
+#define GPIOA_ODR REG32(GPIOA_BASE_ADDR + 0x0Cu)
 
 #define AFIO_EXTICR1 REG32(AFIO_BASE_ADDR + 0x08u)
 
@@ -41,11 +43,22 @@
 #define HALL_EST_SECTOR_DEG 60u
 #define HALL_EST_FULL_DEG    360u
 #define HALL_EST_HISTORY_LEN 6u
-#define HALL_EST_TIMEOUT_CYCLES (HALL_CPU_CLOCK_HZ)
+/* Allow RPM/angle timing once at least this many sector samples exist. */
+#define HALL_EST_MIN_HISTORY 2u
+#define HALL_EST_TIMEOUT_CYCLES (SystemCoreClock_Get())
 #define HALL_EST_MIN_MECH_RPM 30u
-#define HALL_SPEED_TIMEOUT_SECTORS 2u
+/* Fresh measurement window: tolerate missed edges up to this many sectors. */
+#define HALL_SPEED_TIMEOUT_SECTORS 6u
+/* After measurement timeout, hold last filtered RPM this many extra sectors. */
+#define HALL_RPM_HOLD_SECTORS 6u
+/* LPF: y += (x - y) >> N  (N=3 => alpha ~= 1/8). */
+#define HALL_RPM_LPF_SHIFT 3u
+/* Decay toward 0 each 1 ms tick while no fresh measurement: rpm -= rpm >> N. */
+#define HALL_RPM_DECAY_SHIFT 3u
 
 #define HALL_LINE_MASK ((1u << HALL_CH1_PIN) | (1u << HALL_CH2_PIN) | (1u << HALL_CH3_PIN))
+#define HALL_PATTERN_INVALID_0 0u
+#define HALL_PATTERN_INVALID_7 7u
 
 static volatile u1 u1g_hall_ch1_state;
 static volatile u1 u1g_hall_ch2_state;
@@ -62,6 +75,8 @@ static volatile u2 u2g_hall_est_ang_next;
 static volatile uint8_t hall_level[3];
 static volatile uint32_t hall_edge_count[3];
 static volatile uint32_t hall_last_irq_cycle[3];
+static volatile uint32_t hall_invalid_pattern_count;
+static volatile uint8_t hall_pattern_valid;
 static volatile uint32_t hall_est_last_cycle;
 static volatile uint32_t hall_est_avg_sector_cycles;
 static volatile uint32_t hall_est_sector_hist[HALL_EST_HISTORY_LEN];
@@ -74,6 +89,7 @@ static volatile uint8_t hall_est_prev_sector;
 static volatile int8_t hall_est_dir;
 
 static volatile s4 s4g_hall_speed_elec_rpm;
+static volatile s4 s4g_hall_speed_elec_rpm_raw;
 static volatile s4 s4g_hall_speed_mech_rpm;
 
 static uint32_t hall_debounce_cycles;
@@ -81,6 +97,9 @@ static uint32_t hall_debounce_cycles;
 static const uint8_t hall_pin_map[3] = { HALL_CH1_PIN, HALL_CH2_PIN, HALL_CH3_PIN };
 
 static void hall_est_reset_history(void);
+static void hall_rpm_set_filtered(s4 rpm_meas);
+static void hall_rpm_decay(void);
+static uint8_t hall_pattern_is_valid(uint8_t pattern);
 
 static uint16_t hall_norm_angle(uint16_t angle_deg)
 {
@@ -116,6 +135,64 @@ static uint8_t hall_est_is_timeout(uint32_t now_cycle)
     return 0u;
 }
 
+static uint8_t hall_pattern_is_valid(uint8_t pattern)
+{
+    return (uint8_t)((pattern != HALL_PATTERN_INVALID_0) &&
+                     (pattern != HALL_PATTERN_INVALID_7));
+}
+
+static void hall_rpm_set_filtered(s4 rpm_meas)
+{
+    s4 rpm_filt;
+    s4 delta;
+
+    s4g_hall_speed_elec_rpm_raw = rpm_meas;
+    rpm_filt = s4g_hall_speed_elec_rpm;
+
+    /* First valid sample: acquire immediately so startup is not sluggish. */
+    if (rpm_filt == 0)
+    {
+        s4g_hall_speed_elec_rpm = rpm_meas;
+        return;
+    }
+
+    delta = rpm_meas - rpm_filt;
+    rpm_filt += (delta >> HALL_RPM_LPF_SHIFT);
+    s4g_hall_speed_elec_rpm = rpm_filt;
+}
+
+static void hall_rpm_decay(void)
+{
+    s4 rpm_filt;
+
+    rpm_filt = s4g_hall_speed_elec_rpm;
+    if (rpm_filt > 0)
+    {
+        rpm_filt -= (rpm_filt >> HALL_RPM_DECAY_SHIFT);
+        if (rpm_filt < 0)
+        {
+            rpm_filt = 0;
+        }
+    }
+    else if (rpm_filt < 0)
+    {
+        rpm_filt -= (rpm_filt >> HALL_RPM_DECAY_SHIFT);
+        if (rpm_filt > 0)
+        {
+            rpm_filt = 0;
+        }
+    }
+
+    /* Snap tiny residual to zero so decay finishes cleanly. */
+    if ((rpm_filt > -2) && (rpm_filt < 2))
+    {
+        rpm_filt = 0;
+        s4g_hall_speed_elec_rpm_raw = 0;
+    }
+
+    s4g_hall_speed_elec_rpm = rpm_filt;
+}
+
 static void hall_est_force_reset(uint32_t now_cycle)
 {
     uint8_t curr_sector;
@@ -127,6 +204,9 @@ static void hall_est_force_reset(uint32_t now_cycle)
     hall_est_has_prev_sector = 0u;
     hall_est_prev_sector = curr_sector;
     hall_est_last_cycle = now_cycle;
+    s4g_hall_speed_elec_rpm_raw = 0;
+    s4g_hall_speed_elec_rpm = 0;
+    s4g_hall_speed_mech_rpm = 0;
 
     u2g_hall_est_ang_ref = hall_norm_angle(u2g_hall_angle_deg);
     u2g_hall_est_ang_next = u2g_hall_est_ang_ref;
@@ -157,6 +237,11 @@ static void hall_est_add_sector_sample(uint32_t now_cycle, uint32_t sector_cycle
         hall_est_reset_history();
     }
 
+    if (sector_cycles == 0u)
+    {
+        return;
+    }
+
     if (hall_est_sector_hist_count == 0u)
     {
         hall_est_sector_hist_start_cycle = now_cycle;
@@ -181,9 +266,11 @@ static void hall_est_add_sector_sample(uint32_t now_cycle, uint32_t sector_cycle
         hall_est_sector_hist_index = 0u;
     }
 
-    if (hall_est_sector_hist_count >= HALL_EST_HISTORY_LEN)
+    /* Average as soon as the minimum number of samples is available. */
+    if (hall_est_sector_hist_count >= HALL_EST_MIN_HISTORY)
     {
-        hall_est_avg_sector_cycles = hall_est_sector_hist_sum / HALL_EST_HISTORY_LEN;
+        hall_est_avg_sector_cycles =
+            hall_est_sector_hist_sum / (uint32_t)hall_est_sector_hist_count;
     }
     else
     {
@@ -215,21 +302,29 @@ static void hall_refresh_all_levels(void)
     u1g_hall_ch2_state = hall_level[1];
     u1g_hall_ch3_state = hall_level[2];
 
-    u2g_hall_ch1_state = u1g_hall_ch1_state*1000;
-    u2g_hall_ch2_state = u1g_hall_ch2_state*1000;
-    u2g_hall_ch3_state = u1g_hall_ch3_state*1000;
+    u2g_hall_ch1_state = u1g_hall_ch1_state * 10u;
+    u2g_hall_ch2_state = u1g_hall_ch2_state * 10u;
+    u2g_hall_ch3_state = u1g_hall_ch3_state * 10u;
 
     u1g_hall_state = (u1)((hall_level[2] << 2) | (hall_level[1] << 1) | hall_level[0]);
+    hall_pattern_valid = hall_pattern_is_valid(u1g_hall_state);
+
     pst_config = config_get();
-    u2g_hall_angle_deg = pst_config->u2t_hall_pattern_angle_deg[u1g_hall_state];
+    if (hall_pattern_valid != 0u)
+    {
+        u2g_hall_angle_deg = pst_config->u2t_hall_pattern_angle_deg[u1g_hall_state];
+    }
+    /* Invalid 000/111: keep previous valid angle; do not remap to 0 deg. */
 }
 
 static void hall_est_reset_on_interrupt(void)
 {
     uint32_t now_cycle;
     uint32_t sector_cycles;
+    uint32_t sample_cycles;
     uint8_t curr_sector;
     uint8_t sector_step;
+    uint8_t sector_span;
     int8_t next_dir;
 
     now_cycle = DWT_CYCCNT;
@@ -241,33 +336,67 @@ static void hall_est_reset_on_interrupt(void)
     }
 
     next_dir = 0;
+    sector_span = 1u;
     if (hall_est_has_prev_sector != 0u)
     {
         sector_step = (uint8_t)((curr_sector + 6u - hall_est_prev_sector) % 6u);
+
+        /* Accept +1/+2 FW and -1/-2 (5/4) REV; step 2/4 = one missed sector. */
         if (sector_step == 1u)
         {
             next_dir = 1;
+            sector_span = 1u;
+        }
+        else if (sector_step == 2u)
+        {
+            next_dir = 1;
+            sector_span = 2u;
         }
         else if (sector_step == 5u)
         {
             next_dir = -1;
+            sector_span = 1u;
+        }
+        else if (sector_step == 4u)
+        {
+            next_dir = -1;
+            sector_span = 2u;
+        }
+        else if (sector_step == 0u)
+        {
+            /* Same sector / bounce after debounce: ignore timing update. */
+            return;
         }
 
         if (next_dir == 0)
         {
+            /* Ambiguous jump (e.g. 180 deg): keep last speed, drop direction. */
             hall_est_dir = 0;
             hall_est_reset_history();
         }
         else
         {
-            if (next_dir != hall_est_dir)
+            if ((hall_est_dir != 0) && (next_dir != hall_est_dir))
             {
+                /* True reverse: rebuild history with the new direction. */
                 hall_est_dir = next_dir;
                 hall_est_reset_history();
             }
+            else
+            {
+                hall_est_dir = next_dir;
+            }
 
             sector_cycles = now_cycle - hall_est_last_cycle;
-            hall_est_add_sector_sample(now_cycle, sector_cycles);
+            if (sector_span > 1u)
+            {
+                sample_cycles = sector_cycles / (uint32_t)sector_span;
+            }
+            else
+            {
+                sample_cycles = sector_cycles;
+            }
+            hall_est_add_sector_sample(now_cycle, sample_cycles);
         }
     }
     else
@@ -283,17 +412,20 @@ static void hall_est_reset_on_interrupt(void)
 
     if (hall_est_dir > 0)
     {
-        u2g_hall_est_ang_next = hall_norm_angle((uint16_t)(u2g_hall_est_ang_ref + HALL_EST_SECTOR_DEG));
+        u2g_hall_est_ang_next =
+            hall_norm_angle((uint16_t)(u2g_hall_est_ang_ref + HALL_EST_SECTOR_DEG));
     }
     else if (hall_est_dir < 0)
     {
         if (u2g_hall_est_ang_ref >= HALL_EST_SECTOR_DEG)
         {
-            u2g_hall_est_ang_next = (uint16_t)(u2g_hall_est_ang_ref - HALL_EST_SECTOR_DEG);
+            u2g_hall_est_ang_next =
+                (uint16_t)(u2g_hall_est_ang_ref - HALL_EST_SECTOR_DEG);
         }
         else
         {
-            u2g_hall_est_ang_next = (uint16_t)(HALL_EST_FULL_DEG + u2g_hall_est_ang_ref - HALL_EST_SECTOR_DEG);
+            u2g_hall_est_ang_next =
+                (uint16_t)(HALL_EST_FULL_DEG + u2g_hall_est_ang_ref - HALL_EST_SECTOR_DEG);
         }
     }
     else
@@ -326,9 +458,14 @@ static void hall_handle_exti_line(uint8_t line, uint8_t channel)
         hall_edge_count[channel]++;
         Hall_OnEdge(channel, hall_level[channel]);
 
-        if ((u1g_hall_state != 0u) && (u1g_hall_state != 7u))
+        if (hall_pattern_valid != 0u)
         {
             hall_est_reset_on_interrupt();
+        }
+        else
+        {
+            /* 000/111: noise or open wiring — count and skip estimator update. */
+            hall_invalid_pattern_count++;
         }
     }
 }
@@ -341,14 +478,20 @@ void Hall_Init(void)
     RCC_APB2ENR |= (RCC_APB2ENR_AFIOEN | RCC_APB2ENR_IOPAEN);
 
     hall_timebase_init();
-    hall_debounce_cycles = (HALL_CPU_CLOCK_HZ / 1000000u) * HALL_DEBOUNCE_US;
+    hall_debounce_cycles = (SystemCoreClock_Get() / 1000000u) * HALL_DEBOUNCE_US;
 
-    /* Configure PA1, PA2, PA3 as floating input (MODE=00, CNF=01). */
+    /*
+     * Configure PA1, PA2, PA3 as input with pull-up/pull-down (MODE=00, CNF=10).
+     * ODR=1 selects pull-up to reject floating/open-wire noise that yields 000.
+     * If the Hall sensors are open-collector to GND this is the correct bias.
+     * If board already has strong external pull-downs, change ODR bits to 0.
+     */
     for (i = 0u; i < 3u; ++i)
     {
         shift = hall_pin_map[i] * 4u;
         GPIOA_CRL &= ~(0xFu << shift);
-        GPIOA_CRL |= (0x4u << shift);
+        GPIOA_CRL |= (0x8u << shift); /* input pull-up/pull-down */
+        GPIOA_ODR |= (1u << hall_pin_map[i]); /* pull-up */
     }
 
     /* EXTI1..3 map to Port A (value 0000). */
@@ -364,13 +507,21 @@ void Hall_Init(void)
         hall_edge_count[i] = 0u;
         hall_last_irq_cycle[i] = 0u;
     }
+    hall_invalid_pattern_count = 0u;
+    hall_pattern_valid = 0u;
     hall_est_last_cycle = 0u;
     hall_est_has_prev_sector = 0u;
     hall_est_prev_sector = 0u;
     hall_est_dir = 0;
+    s4g_hall_speed_elec_rpm = 0;
+    s4g_hall_speed_elec_rpm_raw = 0;
+    s4g_hall_speed_mech_rpm = 0;
     hall_est_reset_history();
     hall_refresh_all_levels();
-    hall_est_reset_on_interrupt();
+    if (hall_pattern_valid != 0u)
+    {
+        hall_est_reset_on_interrupt();
+    }
 
     /* Enable EXTI1, EXTI2, EXTI3 IRQs in NVIC. */
     NVIC_ISER0 = (1u << 7) | (1u << 8) | (1u << 9);
@@ -399,6 +550,11 @@ uint32_t Hall_GetEdgeCount(uint8_t channel)
     return hall_edge_count[channel];
 }
 
+uint32_t Hall_GetInvalidPatternCount(void)
+{
+    return hall_invalid_pattern_count;
+}
+
 EN_COM_STS_T eng_hall_ang_est(u2 *pu2t_angle_deg)
 {
     const ST_INVERTER_CONFIG *cfg;
@@ -423,7 +579,7 @@ EN_COM_STS_T eng_hall_ang_est(u2 *pu2t_angle_deg)
     max_sector_cycles = 0u;
     if ((cfg != 0) && (cfg->u1t_motor_pole_pairs != 0u))
     {
-        max_sector_cycles = (HALL_CPU_CLOCK_HZ * 10u) /
+        max_sector_cycles = (SystemCoreClock_Get() * 10u) /
             ((uint32_t)HALL_EST_MIN_MECH_RPM * cfg->u1t_motor_pole_pairs);
     }
 
@@ -553,30 +709,63 @@ int32_t eng_hall_elec_rpm_est(void)
     uint32_t elapsed_cycle;
     uint32_t rpm_abs;
     uint32_t sector_cycles;
+    uint32_t fresh_limit_cycles;
+    uint32_t hold_limit_cycles;
+    s4 rpm_meas;
 
     now_cycle = DWT_CYCCNT;
 
-    sector_cycles = hall_est_avg_sector_cycles;
-    elapsed_cycle = now_cycle - hall_est_last_cycle;
-    if ((hall_est_is_timeout(now_cycle) != 0u) ||
-        (sector_cycles == 0u) ||
-        (hall_est_dir == 0) ||
-        (elapsed_cycle > (sector_cycles * HALL_SPEED_TIMEOUT_SECTORS)))
+    if (hall_est_is_timeout(now_cycle) != 0u)
     {
-        s4g_hall_speed_elec_rpm = 0;
+        /* Long stall (~1 s): clear completely. */
+        hall_est_force_reset(now_cycle);
         return 0;
     }
 
-    /* One electrical revolution contains 6 Hall sectors. */
-    rpm_abs = (HALL_CPU_CLOCK_HZ * 10u) / sector_cycles;
+    sector_cycles = hall_est_avg_sector_cycles;
+    elapsed_cycle = now_cycle - hall_est_last_cycle;
 
-    if (hall_est_dir < 0)
+    if ((sector_cycles != 0u) && (hall_est_dir != 0))
     {
-        s4g_hall_speed_elec_rpm = -(s4)rpm_abs;
+        fresh_limit_cycles = sector_cycles * HALL_SPEED_TIMEOUT_SECTORS;
+        hold_limit_cycles =
+            sector_cycles * (HALL_SPEED_TIMEOUT_SECTORS + HALL_RPM_HOLD_SECTORS);
+
+        if (elapsed_cycle <= fresh_limit_cycles)
+        {
+            /* One electrical revolution contains 6 Hall sectors. */
+            rpm_abs = (SystemCoreClock_Get() * 10u) / sector_cycles;
+            if (hall_est_dir < 0)
+            {
+                rpm_meas = -(s4)rpm_abs;
+            }
+            else
+            {
+                rpm_meas = (s4)rpm_abs;
+            }
+            hall_rpm_set_filtered(rpm_meas);
+        }
+        else if (elapsed_cycle <= hold_limit_cycles)
+        {
+            /* No fresh edges yet: hold last filtered value. */
+        }
+        else
+        {
+            /* Still moving window expired: decay slowly toward 0. */
+            hall_rpm_decay();
+        }
     }
     else
     {
-        s4g_hall_speed_elec_rpm = (s4)rpm_abs;
+        /* No valid timing yet: decay any residual instead of hard zero. */
+        if (s4g_hall_speed_elec_rpm != 0)
+        {
+            hall_rpm_decay();
+        }
+        else
+        {
+            s4g_hall_speed_elec_rpm_raw = 0;
+        }
     }
 
     return s4g_hall_speed_elec_rpm;
@@ -588,7 +777,7 @@ int32_t eng_hall_mech_rpm_est(void)
     int32_t elec_rpm;
 
     cfg = config_get();
-    elec_rpm = eng_hall_elec_rpm_est();
+    elec_rpm = s4g_hall_speed_elec_rpm;
 
     if ((cfg == 0) || (cfg->u1t_motor_pole_pairs == 0u))
     {

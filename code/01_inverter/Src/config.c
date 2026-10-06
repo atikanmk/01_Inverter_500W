@@ -6,22 +6,23 @@ static const ST_INVERTER_CONFIG g_inverter_config = {
     .u2t_dc_max = 1u,
     .u2t_phase_max = 3u,
     .u1t_tps_perc_start = 5u,
-    .u2t_throttle_min_mv = 800u,
-    .u2t_throttle_max_mv = 3300u,
+    .u2t_throttle_min_mv = 1900u,
+    .u2t_throttle_max_mv = 3000u,
     .u4t_bemf_divider_top_ohm = 300000u,
     .u4t_bemf_divider_bottom_ohm = 10000u,
     .u4t_curr_ph_u_gain_mv_per_ca = 1200,
     .u4t_curr_ph_v_gain_mv_per_ca = 1200,
     .s1t_curr_ph_u_direction = -1,
     .s1t_curr_ph_v_direction = -1,
+    .s4t_centi_amp_per_centi_nm_fac100pc = 2857,
     .u2t_hall_pattern_angle_deg = {
         [0x0u] = 0u,   /* 000: invalid */
-        [0x1u] = 210u, /* 001: Hall1=1, Hall2=0, Hall3=0 */
-        [0x2u] = 90u, /* 010: Hall1=0, Hall2=1, Hall3=0 */
-        [0x3u] = 150u, /* 011: Hall1=1, Hall2=1, Hall3=0 */
-        [0x4u] = 330u,  /* 100: Hall1=0, Hall2=0, Hall3=1 */
-        [0x5u] = 270u, /* 101: Hall1=1, Hall2=0, Hall3=1 */
-        [0x6u] = 30u,  /* 110: Hall1=0, Hall2=1, Hall3=1 */
+        [0x1u] = 90,//210u, /* 001: Hall1=1, Hall2=0, Hall3=0 */
+        [0x2u] = 210,//90u, /* 010: Hall1=0, Hall2=1, Hall3=0 */
+        [0x3u] = 150,//150u, /* 011: Hall1=1, Hall2=1, Hall3=0 */
+        [0x4u] = 330,//330u,  /* 100: Hall1=0, Hall2=0, Hall3=1 */
+        [0x5u] = 30,//270u, /* 101: Hall1=1, Hall2=0, Hall3=1 */
+        [0x6u] = 270,//30u,  /* 110: Hall1=0, Hall2=1, Hall3=1 */
         [0x7u] = 0u    /* 111: invalid */
     },
     .stt_adc = {

@@ -16,6 +16,7 @@ C_SRCS += \
 ../Src/pwm.c \
 ../Src/syscalls.c \
 ../Src/sysmem.c \
+../Src/system_clock.c \
 ../Src/task.c 
 
 OBJS += \
@@ -30,6 +31,7 @@ OBJS += \
 ./Src/pwm.o \
 ./Src/syscalls.o \
 ./Src/sysmem.o \
+./Src/system_clock.o \
 ./Src/task.o 
 
 C_DEPS += \
@@ -44,6 +46,7 @@ C_DEPS += \
 ./Src/pwm.d \
 ./Src/syscalls.d \
 ./Src/sysmem.d \
+./Src/system_clock.d \
 ./Src/task.d 
 
 
@@ -54,7 +57,7 @@ Src/%.o Src/%.su Src/%.cyclo: ../Src/%.c Src/subdir.mk
 clean: clean-Src
 
 clean-Src:
-	-$(RM) ./Src/adc.cyclo ./Src/adc.d ./Src/adc.o ./Src/adc.su ./Src/cnv.cyclo ./Src/cnv.d ./Src/cnv.o ./Src/cnv.su ./Src/com.cyclo ./Src/com.d ./Src/com.o ./Src/com.su ./Src/config.cyclo ./Src/config.d ./Src/config.o ./Src/config.su ./Src/drv_mng.cyclo ./Src/drv_mng.d ./Src/drv_mng.o ./Src/drv_mng.su ./Src/foc.cyclo ./Src/foc.d ./Src/foc.o ./Src/foc.su ./Src/hall.cyclo ./Src/hall.d ./Src/hall.o ./Src/hall.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/pwm.cyclo ./Src/pwm.d ./Src/pwm.o ./Src/pwm.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/task.cyclo ./Src/task.d ./Src/task.o ./Src/task.su
+	-$(RM) ./Src/adc.cyclo ./Src/adc.d ./Src/adc.o ./Src/adc.su ./Src/cnv.cyclo ./Src/cnv.d ./Src/cnv.o ./Src/cnv.su ./Src/com.cyclo ./Src/com.d ./Src/com.o ./Src/com.su ./Src/config.cyclo ./Src/config.d ./Src/config.o ./Src/config.su ./Src/drv_mng.cyclo ./Src/drv_mng.d ./Src/drv_mng.o ./Src/drv_mng.su ./Src/foc.cyclo ./Src/foc.d ./Src/foc.o ./Src/foc.su ./Src/hall.cyclo ./Src/hall.d ./Src/hall.o ./Src/hall.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/pwm.cyclo ./Src/pwm.d ./Src/pwm.o ./Src/pwm.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_clock.cyclo ./Src/system_clock.d ./Src/system_clock.o ./Src/system_clock.su ./Src/task.cyclo ./Src/task.d ./Src/task.o ./Src/task.su
 
 .PHONY: clean-Src
 

@@ -29,9 +29,9 @@ extern "C" {
 #define HALL_CH3_PIN 3u
 
 /* Debounce time for Hall EXTI edges in microseconds. */
-#define HALL_DEBOUNCE_US 5u
+#define HALL_DEBOUNCE_US 50u
 
-/* CPU clock used for debounce cycle calculation. */
+/* CPU clock used for debounce / DWT timing (match SystemInit 72 MHz). */
 #define HALL_CPU_CLOCK_HZ 72000000u
 
 /************************************
@@ -49,6 +49,7 @@ void Hall_Init(void);
 uint8_t Hall_GetLevel(uint8_t channel);
 uint8_t Hall_GetPattern(void);
 uint32_t Hall_GetEdgeCount(uint8_t channel);
+uint32_t Hall_GetInvalidPatternCount(void);
 EN_COM_STS_T eng_hall_ang_est(u2 *pu16t_angle_deg);
 int32_t eng_hall_elec_rpm_est(void);
 int32_t eng_hall_mech_rpm_est(void);
