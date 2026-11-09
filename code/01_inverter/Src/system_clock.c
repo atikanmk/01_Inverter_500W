@@ -95,7 +95,7 @@ static uint32_t system_clock_switch_pll(uint32_t core_hz)
     s_system_timer_clock_hz = core_hz;
     return 1u;
 }
-
+#if(0)
 static uint32_t system_clock_try_hse_72(void)
 {
     uint32_t cfgr;
@@ -126,7 +126,7 @@ static uint32_t system_clock_try_hse_72(void)
 
     return 1u;
 }
-
+#endif
 static uint32_t system_clock_try_hsi_64(void)
 {
     uint32_t cfgr;

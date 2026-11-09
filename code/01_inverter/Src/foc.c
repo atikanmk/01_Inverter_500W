@@ -1,6 +1,6 @@
 /**
  ********************************************************************************
- * @file    foc.c
+ * @file    foc.c-
  * @author  Atikan
  * @date    2026-07-19
  * @brief   FOC control (integer Q15 path for 100 us ISR).
@@ -28,16 +28,18 @@
 #define FOC_CURRENT_PI_KI_Q10        2
 #define FOC_VOLTAGE_LIMIT_CPCT       10000
 #define FOC_SVM_DUTY_CENTER_CPCT     5000
-#define FOC_VS_POS_MAX_PERC          (5000)
-#define FOC_VS_NEG_MAX_PERC          (-5000)
-#define FOC_VQ_POS_MAX_PERC          (5000)
-#define FOC_VQ_NEG_MAX_PERC          (-5000)
-#define FOC_VD_POS_MAX_PERC          (100)
+#define FOC_VS_POS_MAX_PERC          (10000)
+#define FOC_VS_NEG_MAX_PERC          (-10000)
+#define FOC_VQ_POS_MAX_PERC          (10000)
+#define FOC_VQ_NEG_MAX_PERC          (-10000)
+#define FOC_VD_POS_MAX_PERC          (1000)
 #define FOC_VD_NEG_MAX_PERC          (-5000)
 #define FOC_CLARKE_K1_Q15            18919
 #define FOC_CLARKE_K2_Q15            37837
-#define FOC_SVM_HALF_Q15             16384
-#define FOC_SVM_SQRT3_2_Q15          28378
+/* Alpha/beta -> phase with 1/sqrt(3) folded in, so |Vs| = 10000 gives 10000 peak-to-peak. */
+#define FOC_SVM_U_ALPHA_Q15          18918  /* 1/sqrt(3) */
+#define FOC_SVM_VW_ALPHA_Q15         9459   /* 1/(2*sqrt(3)) */
+#define FOC_SVM_VW_BETA_Q15          16384  /* 1/2 */
 
 /************************************
  * PRIVATE TYPEDEFS
@@ -72,6 +74,8 @@ s4 s4g_foc_svm_u_cpct;
 s4 s4g_foc_svm_v_cpct;
 s4 s4g_foc_svm_w_cpct;
 s4 s4g_foc_trq_cmd;
+s4 s4g_foc_spd_rpm;
+u2 u2g_foc_tps_centi_perc;
 
 /************************************
  * FUNCTION PROTOTYPES
@@ -80,7 +84,8 @@ static EN_COM_STS_T ens_foc_park_transform(s4 s4t_alpha, s4 s4t_beta, u2 u16t_an
 static EN_COM_STS_T ens_foc_clarke_transform(s4 s4t_u, s4 s4t_v, s4 *s4t_alpha, s4 *s4t_beta);
 static EN_COM_STS_T ens_foc_inverse_park_transform(s4 s4t_d, s4 s4t_q, u2 u16t_angle_deg, s4 *s4t_alpha, s4 *s4t_beta);
 static EN_COM_STS_T ens_foc_svm(s4 s4t_valpha, s4 s4t_vbeta, s4 *s4t_svm_u, s4 *s4t_svm_v, s4 *s4t_svm_w);
-static EN_COM_STS_T ens_foc_trq_ref(u2 u2t_tps_perc, s4 s4t_rpm, s4 *ps4t_trq_centi_nm);
+static s4 ens_foc_limit_duty(s4 s4t_duty);
+static EN_COM_STS_T ens_foc_trq_ref(void);
 static EN_COM_STS_T ens_foc_curr_ref(s4 s4t_trq_cmd_ca, s4 s4t_rpm, s4 s4t_iq_feb_ca, s4 *ps4t_iq_ref_ca, s4 *ps4t_id_ref_ca);
 static EN_COM_STS_T ens_foc_curr_pi_cal(s4 s4t_iq_ref_ca, s4 s4t_id_ref_ca, s4 s4t_iq_feb_ca, s4 s4t_id_feb_ca, s4 *s4t_vq_cpct, s4 *s4t_vd_cpct);
 static s2 ens_foc_sin_q15(u2 u2t_angle_deg);
@@ -183,6 +188,9 @@ EN_COM_STS_T eng_foc_init(void)
     s4g_foc_id_pi_integral_q10 = 0;
     s4s_d_ft_static = 0;
     s4s_q_ft_static = 0;
+    s4g_foc_trq_cmd = 0;
+    s4g_foc_spd_rpm = 0;
+    u2g_foc_tps_centi_perc = 0u;
     /*=========OUTPUT==========*/
     return EN_COM_STS_OK;
 }
@@ -216,24 +224,24 @@ EN_COM_STS_T eng_foc_main(void)
     s4 s4t_svm_w_cpct = 0;
     s4 s4t_trq = 0;
     s4 s4t_spd_rpm = 0;
-    u2 u2t_tps_centi_perc = 0;
 
     /*==========INPUT==========*/
-    /* Runs from eng_task_main(), not TIM2. Clarke/Park/torque are safe here.
-     * Voltage command stays open-loop (PI not enabled). */
+    /* Runs from eng_task_main(), not TIM2. Torque table is in lo_pri. */
     (void)eng_cnv_get_phase_currents(&s4t_u_ca, &s4t_v_ca, &s4t_w_ca);
+    (void)eng_cnv_get_throttle_centi_perc(&u2g_foc_tps_centi_perc);
     (void)eng_hall_ang_est(&u2t_angle_est);
-    (void)eng_cnv_get_throttle_centi_perc(&u2t_tps_centi_perc);
     (void)eng_cnv_get_mtr_spd_rpm(&s4t_spd_rpm);
+    s4g_foc_spd_rpm = s4t_spd_rpm;
+    s4t_trq = s4g_foc_trq_cmd;
 
     /*========OPERATION========*/
     (void)ens_foc_clarke_transform(s4t_u_ca, s4t_v_ca, &s4t_alpha_ca, &s4t_beta_ca);
     (void)ens_foc_park_transform(s4t_alpha_ca, s4t_beta_ca, u2t_angle_est,
                                  &s4t_id_feb_ca, &s4t_iq_feb_ca, &s4t_is_feb_ca);
 
-    (void)ens_foc_trq_ref(u2t_tps_centi_perc, s4t_spd_rpm, &s4t_trq);
     (void)ens_foc_curr_ref(s4t_trq, s4t_spd_rpm, s4t_iq_feb_ca, &s4t_iq_ref_ca, &s4t_id_ref_ca);
 
+	#if (0)
     /* Open-loop: Vq from throttle centi-%, Vd = 0 (tuning). PI stays off. */
     s4t_vq_cpct = (s4)u2t_tps_centi_perc;
     if (s4t_vq_cpct > FOC_VQ_POS_MAX_PERC)
@@ -241,7 +249,8 @@ EN_COM_STS_T eng_foc_main(void)
         s4t_vq_cpct = FOC_VQ_POS_MAX_PERC;
     }
     s4t_vd_cpct = 0;
-
+	#endif
+	ens_foc_curr_pi_cal(s4t_iq_ref_ca, s4t_id_ref_ca, s4t_iq_feb_ca, s4t_id_feb_ca, &s4t_vq_cpct, &s4t_vd_cpct);
     (void)ens_foc_inverse_park_transform(s4t_vd_cpct, s4t_vq_cpct, u2t_angle_est,
                                          &s4t_valpha_cpct, &s4t_vbeta_cpct);
     (void)ens_foc_svm(s4t_valpha_cpct, s4t_vbeta_cpct,
@@ -264,11 +273,31 @@ EN_COM_STS_T eng_foc_main(void)
     s4g_foc_svm_u_cpct = s4t_svm_u_cpct;
     s4g_foc_svm_v_cpct = s4t_svm_v_cpct;
     s4g_foc_svm_w_cpct = s4t_svm_w_cpct;
-    s4g_foc_trq_cmd = s4t_trq;
 
     return EN_COM_STS_OK;
 }
 
+
+/**
+ * @fn     eng_foc_main_lo_pri
+ * @id     FOC-004
+ * @brief  FOC c12
+ * @brief  Low-priority FOC: throttle/speed torque table -> s4g_foc_trq_cmd
+ * @param  None
+ * @return EN_COM_STS_OK
+ */
+EN_COM_STS_T eng_foc_main_lo_pri(void)
+{
+
+    /*==========INPUT==========*/
+
+    /*========OPERATION========*/
+    (void)ens_foc_trq_ref();
+
+    /*=========OUTPUT==========*/
+
+    return EN_COM_STS_OK;
+}
 /**
  * @fn     ens_foc_curr_ref
  * @id     FOC-005
@@ -406,8 +435,8 @@ static EN_COM_STS_T ens_foc_park_transform(s4 s4t_alpha, s4 s4t_beta, u2 u16t_an
     s4g_foc_iq_raw_ca = s4t_q_ft;
 
     /* LPF ~0.95/0.05: y = (19*y + x)/20 */
-    s4t_q_ft = ((s4s_q_ft_static * 19) + s4t_q_ft) / 20;
-    s4t_d_ft = ((s4s_d_ft_static * 19) + s4t_d_ft) / 20;
+    s4t_q_ft = ((s4s_q_ft_static * 990) + s4t_q_ft*10) / 1000;
+    s4t_d_ft = ((s4s_d_ft_static * 990) + s4t_d_ft*10) / 1000;
 
     s4t_abs_d = (s4t_d_ft >= 0) ? s4t_d_ft : -s4t_d_ft;
     s4t_abs_q = (s4t_q_ft >= 0) ? s4t_q_ft : -s4t_q_ft;
@@ -483,6 +512,25 @@ static EN_COM_STS_T ens_foc_inverse_park_transform(s4 s4t_d, s4 s4t_q, u2 u16t_a
 }
 
 /**
+ * @fn     ens_foc_limit_duty
+ * @brief  Clamp a duty to 0..2*FOC_SVM_DUTY_CENTER_CPCT so rounding cannot wrap in the u2 PWM cast
+ * @param  s4t_duty: Duty in centi-percent (s4)
+ * @return Limited duty
+ */
+static s4 ens_foc_limit_duty(s4 s4t_duty)
+{
+    if (s4t_duty < 0)
+    {
+        return 0;
+    }
+    if (s4t_duty > (2 * FOC_SVM_DUTY_CENTER_CPCT))
+    {
+        return (2 * FOC_SVM_DUTY_CENTER_CPCT);
+    }
+    return s4t_duty;
+}
+
+/**
  * @fn     ens_foc_svm
  * @id     FOC-010
  * @brief  Space-vector modulation from alpha/beta voltages to UVW duties
@@ -504,9 +552,9 @@ static EN_COM_STS_T ens_foc_svm(s4 s4t_valpha, s4 s4t_vbeta, s4 *s4t_svm_u, s4 *
 
     /*==========INPUT==========*/
     /*========OPERATION========*/
-    s4t_phase_u = s4t_valpha;
-    s4t_phase_v = (s4)((((-(s4)FOC_SVM_HALF_Q15) * s4t_valpha) + ((s4)FOC_SVM_SQRT3_2_Q15 * s4t_vbeta)) >> 15);
-    s4t_phase_w = (s4)((((-(s4)FOC_SVM_HALF_Q15) * s4t_valpha) - ((s4)FOC_SVM_SQRT3_2_Q15 * s4t_vbeta)) >> 15);
+    s4t_phase_u = (s4)(((s4)FOC_SVM_U_ALPHA_Q15 * s4t_valpha) >> 15);
+    s4t_phase_v = (s4)((((-(s4)FOC_SVM_VW_ALPHA_Q15) * s4t_valpha) + ((s4)FOC_SVM_VW_BETA_Q15 * s4t_vbeta)) >> 15);
+    s4t_phase_w = (s4)((((-(s4)FOC_SVM_VW_ALPHA_Q15) * s4t_valpha) - ((s4)FOC_SVM_VW_BETA_Q15 * s4t_vbeta)) >> 15);
 
     s4t_phase_min = s4t_phase_u;
     s4t_phase_max = s4t_phase_u;
@@ -530,117 +578,40 @@ static EN_COM_STS_T ens_foc_svm(s4 s4t_valpha, s4 s4t_vbeta, s4 *s4t_svm_u, s4 *
     s4t_common_mode = FOC_SVM_DUTY_CENTER_CPCT - ((s4t_phase_max + s4t_phase_min) / 2);
 
     /*=========OUTPUT==========*/
-    *s4t_svm_u = s4t_phase_u + s4t_common_mode;
-    *s4t_svm_v = s4t_phase_v + s4t_common_mode;
-    *s4t_svm_w = s4t_phase_w + s4t_common_mode;
+    *s4t_svm_u = ens_foc_limit_duty(s4t_phase_u + s4t_common_mode);
+    *s4t_svm_v = ens_foc_limit_duty(s4t_phase_v + s4t_common_mode);
+    *s4t_svm_w = ens_foc_limit_duty(s4t_phase_w + s4t_common_mode);
 
     return EN_COM_STS_OK;
 }
 
-static const s2 s2t_foc_perc_to_centi_nm[100][10] = {
 
-    -10, -11, -12, -13, -14, -15, -16, -17, -18, -19,
-    -8, -9, -10, -11, -12, -13, -14, -15, -16, -17,
-    -6, -7, -8, -9, -10, -11, -12, -13, -14, -15,
-    -4, -5, -6, -7, -8, -9, -10, -11, -12, -13,
-    0, -1, -2, -3, -4, -5, -6, -7, -8, -9,
-    0, -1, -2, -3, -4, -5, -6, -7, -8, -9,
-    1, 0, -1, -2, -3, -4, -5, -6, -7, -8,
-    1, 0, -1, -2, -3, -4, -5, -6, -7, -8,
-    1, 0, -1, -2, -3, -4, -5, -6, -7, -8,
-    2, 1, 0, -1, -2, -3, -4, -5, -6, -7,
-    2, 1, 0, -1, -2, -3, -4, -5, -6, -7,
-    2, 1, 0, -1, -2, -3, -4, -5, -6, -7,
-    3, 2, 1, 0, -1, -2, -3, -4, -5, -6,
-    3, 2, 1, 0, -1, -2, -3, -4, -5, -6,
-    3, 2, 1, 0, -1, -2, -3, -4, -5, -6,
-    4, 3, 2, 1, 0, -1, -2, -3, -4, -5,
-    4, 3, 2, 1, 0, -1, -2, -3, -4, -5,
-    4, 3, 2, 1, 0, -1, -2, -3, -4, -5,
-    4, 3, 2, 1, 0, -1, -2, -3, -4, -5,
-    5, 4, 3, 2, 1, 0, -1, -2, -3, -4,
-    5, 4, 3, 2, 1, 0, -1, -2, -3, -4,
-    5, 4, 3, 2, 1, 0, -1, -2, -3, -4,
-    5, 4, 3, 2, 1, 0, -1, -2, -3, -4,
-    6, 5, 4, 3, 2, 1, 0, -1, -2, -3,
-    6, 5, 4, 3, 2, 1, 0, -1, -2, -3,
-    6, 5, 4, 3, 2, 1, 0, -1, -2, -3,
-    6, 5, 4, 3, 2, 1, 0, -1, -2, -3,
-    7, 6, 5, 4, 3, 2, 1, 0, -1, -2,
-    7, 6, 5, 4, 3, 2, 1, 0, -1, -2,
-    7, 6, 5, 4, 3, 2, 1, 0, -1, -2,
-    7, 6, 5, 4, 3, 2, 1, 0, -1, -2,
-    8, 7, 6, 5, 4, 3, 2, 1, 0, -1,
-    8, 7, 6, 5, 4, 3, 2, 1, 0, -1,
-    8, 7, 6, 5, 4, 3, 2, 1, 0, -1,
-    8, 7, 6, 5, 4, 3, 2, 1, 0, -1,
-    8, 7, 6, 5, 4, 3, 2, 1, 0, -1,
-    9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-    9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-    9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-    9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-    9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-    10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
-    10, 10, 10, 9, 8, 7, 6, 5, 4, 3,
-    10, 10, 10, 10, 9, 8, 7, 6, 5, 4,
-    10, 10, 10, 10, 10, 9, 8, 7, 6, 5,
-    10, 10, 10, 10, 10, 10, 9, 8, 7, 6,
-    10, 10, 10, 10, 10, 10, 10, 9, 8, 7,
-    10, 10, 10, 10, 10, 10, 10, 10, 9, 8,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 9,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+
+static const s2 s2sv_foc_trq_map_cnm[] = {
+    /* 0xRRCC: 20 rows x 6 cols. X = rpm, row Y = tps %, Z = cNm */
+    0x1406,
+           0,  200,  400,  600,  800, 1000,
+    500,     0,  -50,  -60,  -70,  -80, -100,
+    1000,   20,  -20,  -20,  -40,  -60,  -80,
+    1500,   40,   20,    0,  -20,  -40,  -60,
+    2000,   65,   45,   25,    5,  -15,  -35,
+    2500,   93,   73,   53,   33,   13,   -7,
+    3000,  120,  100,   80,   60,   40,   20,
+    3500,  145,  125,  105,   85,   65,   45,
+    4000,  170,  150,  130,  110,   90,   70,
+    4500,  195,  175,  155,  135,  115,   95,
+    5000,  220,  200,  180,  160,  140,  120,
+    5500,  245,  225,  205,  185,  165,  145,
+    6000,  270,  250,  230,  210,  190,  170,
+    6500,  295,  275,  255,  235,  215,  195,
+    7000,  320,  300,  280,  260,  240,  220,
+    7500,  345,  325,  305,  285,  265,  245,
+    8000,  370,  350,  330,  310,  290,  270,
+    8500,  395,  375,  355,  335,  315,  295,
+    9000,  420,  400,  380,  360,  340,  320,
+    9500,  445,  425,  405,  385,  365,  345,
+    10000, 470,  450,  430,  410,  390,  370
 };
-
 /**
  * @fn     ens_foc_trq_ref
  * @id     FOC-011
@@ -650,54 +621,31 @@ static const s2 s2t_foc_perc_to_centi_nm[100][10] = {
  * @param  ps4t_trq_centi_nm: Pointer to torque command in centi-Nm (s4)
  * @return EN_COM_STS_OK or EN_COM_STS_ERR
  */
-static EN_COM_STS_T ens_foc_trq_ref(u2 u2t_tps_perc, s4 s4t_rpm, s4 *ps4t_trq_centi_nm)
+static EN_COM_STS_T ens_foc_trq_ref(void)
 {
-    u2 u2t_table_index;
-    s4 s4t_cmd;
-    s4 s4t_rpm_index;
+    s2 s2t_cmd;
+    s2 s2t_tps_perc;
     s4 s4t_rpm_abs;
+    u2 u2t_tps_centi_perc;
+    s4 s4t_spd_rpm;
 
     /*==========INPUT==========*/
-    if (ps4t_trq_centi_nm == 0)
-    {
-        return EN_COM_STS_ERR;
-    }
+    u2t_tps_centi_perc = u2g_foc_tps_centi_perc;
+    s4t_spd_rpm = s4g_foc_spd_rpm;
 
     /*========OPERATION========*/
-    u2t_table_index = u2t_tps_perc / 100u;
-    if (u2t_table_index >= 100u)
-    {
-        u2t_table_index = 99u;
-    }
-
-    s4t_rpm_abs = s4t_rpm;
+    /* Map Y is throttle % (5..100). Global is centi-%. */
+    s2t_tps_perc = (s2)u2t_tps_centi_perc;
+    s4t_rpm_abs = s4t_spd_rpm;
     if (s4t_rpm_abs < 0)
     {
         s4t_rpm_abs = -s4t_rpm_abs;
     }
 
-    if (s4t_rpm_abs < 500)
-    {
-        s4t_rpm_index = s4t_rpm_abs / 50;
-    }
-    else
-    {
-        s4t_rpm_index = s4t_rpm_abs / 400;
-    }
-
-    if (s4t_rpm_index < 0)
-    {
-        s4t_rpm_index = 0;
-    }
-    if (s4t_rpm_index > 9)
-    {
-        s4t_rpm_index = 9;
-    }
-
-    s4t_cmd = (s4)s2t_foc_perc_to_centi_nm[u2t_table_index][s4t_rpm_index];
+    (void)eng_com_interp2d_s2(s2sv_foc_trq_map_cnm, (s2)s4t_rpm_abs, s2t_tps_perc, &s2t_cmd);
 
     /*=========OUTPUT==========*/
-    *ps4t_trq_centi_nm = s4t_cmd;
+    s4g_foc_trq_cmd = (s4)s2t_cmd;
 
     return EN_COM_STS_OK;
 }

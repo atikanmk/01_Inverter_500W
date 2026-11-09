@@ -37,6 +37,7 @@ extern "C" {
  ************************************/
 extern EN_COM_STS_T eng_foc_init(void);
 extern EN_COM_STS_T eng_foc_main(void);
+extern EN_COM_STS_T eng_foc_main_lo_pri(void);
 
 #ifdef __cplusplus
 }

@@ -47,7 +47,7 @@ typedef enum
 /************************************
  * GLOBAL FUNCTION PROTOTYPES
  ************************************/
-
+extern EN_COM_STS_T eng_com_interp2d_s2(const s2 *ps2t_map, s2 s2t_x, s2 s2t_y, s2 *ps2t_out);
 
 #ifdef __cplusplus
 }

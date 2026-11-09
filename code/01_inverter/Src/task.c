@@ -196,6 +196,7 @@ EN_COM_STS_T eng_task_on_1ms(void)
 {
     (void)eng_cnv_1ms();
     (void)eng_drv_mng_1ms();
+    (void)eng_foc_main_lo_pri();
 
     return EN_COM_STS_OK;
 }

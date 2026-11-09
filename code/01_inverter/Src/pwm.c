@@ -31,6 +31,8 @@
 
 #define GPIOA_CRH REG32(GPIOA_BASE_ADDR + 0x04u)
 #define GPIOB_CRH REG32(GPIOB_BASE_ADDR + 0x04u)
+#define GPIOA_BSRR REG32(GPIOA_BASE_ADDR + 0x10u)
+#define GPIOB_BSRR REG32(GPIOB_BASE_ADDR + 0x10u)
 
 #define TIM1_CR1   REG32(TIM1_BASE_ADDR + 0x00u)
 #define TIM1_EGR   REG32(TIM1_BASE_ADDR + 0x14u)
@@ -71,6 +73,26 @@
 
 #define GPIO_MODE_OUTPUT_50MHZ 0x3u
 #define GPIO_CNF_AF_PP         0x2u
+#define GPIO_CNF_GP_PP         0x0u
+
+/* PA8..PA10 (high side) and PB13..PB15 (low side) pin masks in CRH and BSRR. */
+#define PWM_HI_CRH_MASK ((0xFu << 0) | (0xFu << 4) | (0xFu << 8))
+#define PWM_LO_CRH_MASK ((0xFu << 20) | (0xFu << 24) | (0xFu << 28))
+#define PWM_HI_PIN_MASK ((1u << 8) | (1u << 9) | (1u << 10))
+#define PWM_LO_PIN_MASK ((1u << 13) | (1u << 14) | (1u << 15))
+
+/* BSRR value that sets each pin to its gate-OFF (inactive) level. */
+#if (PWM_HI_ACTIVE_LEVEL == 1u)
+#define PWM_HI_OFF_BSRR (PWM_HI_PIN_MASK << 16)
+#else
+#define PWM_HI_OFF_BSRR PWM_HI_PIN_MASK
+#endif
+
+#if (PWM_LO_ACTIVE_LEVEL == 0u)
+#define PWM_LO_OFF_BSRR PWM_LO_PIN_MASK
+#else
+#define PWM_LO_OFF_BSRR (PWM_LO_PIN_MASK << 16)
+#endif
 
 #if (PWM_HI_ACTIVE_LEVEL == 1u)
 #define PWM_HI_POLARITY_BITS 0u
@@ -105,10 +127,47 @@ static volatile u2 u2sv_pwm_duty_w;
 static u1 pwm_encode_deadtime_us(u4 u4t_deadtime_us);
 static u2 pwm_limit_duty(u2 u2t_duty);
 static u2 pwm_duty_to_ccr(u2 u2t_duty);
+static void pwm_pins_set_gpio_off(void);
+static void pwm_pins_set_timer(void);
 
 /************************************
  * FUNCTIONS
  ************************************/
+/**
+ * @fn     pwm_pins_set_gpio_off
+ * @brief  Drive all PWM pins as GPIO at the gate-OFF level
+ * @return None
+ */
+static void pwm_pins_set_gpio_off(void)
+{
+    u4 u4t_pin_cfg;
+
+    /* Preset the output latch first so the pins do not glitch on mode change. */
+    GPIOA_BSRR = PWM_HI_OFF_BSRR;
+    GPIOB_BSRR = PWM_LO_OFF_BSRR;
+
+    u4t_pin_cfg = (GPIO_MODE_OUTPUT_50MHZ | (GPIO_CNF_GP_PP << 2));
+    GPIOA_CRH &= ~PWM_HI_CRH_MASK;
+    GPIOA_CRH |= (u4t_pin_cfg << 0) | (u4t_pin_cfg << 4) | (u4t_pin_cfg << 8);
+    GPIOB_CRH &= ~PWM_LO_CRH_MASK;
+    GPIOB_CRH |= (u4t_pin_cfg << 20) | (u4t_pin_cfg << 24) | (u4t_pin_cfg << 28);
+}
+
+/**
+ * @fn     pwm_pins_set_timer
+ * @brief  Hand all PWM pins over to TIM1 (alternate function push-pull)
+ * @return None
+ */
+static void pwm_pins_set_timer(void)
+{
+    u4 u4t_pin_cfg;
+
+    u4t_pin_cfg = (GPIO_MODE_OUTPUT_50MHZ | (GPIO_CNF_AF_PP << 2));
+    GPIOA_CRH &= ~PWM_HI_CRH_MASK;
+    GPIOA_CRH |= (u4t_pin_cfg << 0) | (u4t_pin_cfg << 4) | (u4t_pin_cfg << 8);
+    GPIOB_CRH &= ~PWM_LO_CRH_MASK;
+    GPIOB_CRH |= (u4t_pin_cfg << 20) | (u4t_pin_cfg << 24) | (u4t_pin_cfg << 28);
+}
 /**
  * @fn     pwm_encode_deadtime_us
  * @id     PWM-001
@@ -222,18 +281,18 @@ void vdg_pwm_on_100_us(void)
 void vdg_pwm_enable_output(void)
 {
     TIM1_BDTR |= TIM_BDTR_MOE;
-
-    
+    pwm_pins_set_timer();
 }
 
 /**
  * @fn     PWM_DisableOutput
  * @id     PWM-007
- * @brief  Disable TIM1 main and complementary PWM outputs
+ * @brief  Disable TIM1 PWM outputs and hold every gate at its OFF level
  * @return None
  */
 void vdg_pwm_disable_output(void)
 {
+    pwm_pins_set_gpio_off();
     TIM1_BDTR &= ~TIM_BDTR_MOE;
 }
 
@@ -250,20 +309,13 @@ u1 u1g_pwm_get_pwm_enb_sts(void)
  */
 void eng_pwm_init(void)
 {
-    u4 u4t_pin_cfg;
     u4 u4t_period_counts;
     u4 u4t_bdtr;
 
     RCC_APB2ENR |= (RCC_APB2ENR_AFIOEN | RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_TIM1EN);
 
-    /* PA8, PA9, PA10 -> TIM1_CH1/2/3 (high side). */
-    u4t_pin_cfg = (GPIO_MODE_OUTPUT_50MHZ | (GPIO_CNF_AF_PP << 2));
-    GPIOA_CRH &= ~((0xFu << 0) | (0xFu << 4) | (0xFu << 8));
-    GPIOA_CRH |= (u4t_pin_cfg << 0) | (u4t_pin_cfg << 4) | (u4t_pin_cfg << 8);
-
-    /* PB13, PB14, PB15 -> TIM1_CH1N/2N/3N (low side). */
-    GPIOB_CRH &= ~((0xFu << 20) | (0xFu << 24) | (0xFu << 28));
-    GPIOB_CRH |= (u4t_pin_cfg << 20) | (u4t_pin_cfg << 24) | (u4t_pin_cfg << 28);
+    /* PA8..PA10 (TIM1_CH1/2/3) and PB13..PB15 (TIM1_CH1N/2N/3N) start as GPIO at gate-OFF level. */
+    pwm_pins_set_gpio_off();
 
     TIM1_CR1 = 0u;
 
@@ -285,7 +337,8 @@ void eng_pwm_init(void)
                 PWM_HI_POLARITY_BITS |
                 PWM_LO_POLARITY_BITS;
 
-    u4t_bdtr = TIM_BDTR_MOE | (u4)pwm_encode_deadtime_us(PWM_DEADTIME_US);
+    /* MOE stays cleared (PWM disabled) until vdg_pwm_enable_output(). */
+    u4t_bdtr = (u4)pwm_encode_deadtime_us(PWM_DEADTIME_US);
     TIM1_BDTR = u4t_bdtr;
     TIM1_CR1 |= TIM_CR1_ARPE;
     TIM1_EGR = TIM_EGR_UG;

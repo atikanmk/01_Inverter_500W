@@ -1,0 +1,3 @@
+../Src/com.c:56:21:ens_com_axis_locate_s2	8	static
+../Src/com.c:111:11:ens_com_lerp_s2	0	static
+../Src/com.c:138:14:eng_com_interp2d_s2	80	static

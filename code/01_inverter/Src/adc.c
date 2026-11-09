@@ -211,12 +211,12 @@ static EN_COM_STS_T adc_read_single_channel_to(u4 adc_base, u1 channel, u2 *valu
     *value = (u2)(REG32(adc_base + ADC_DR_OFFSET) & 0x0FFFu);
     return EN_COM_STS_OK;
 }
-
+#if(0)
 static EN_COM_STS_T adc_read_single_channel(u4 adc_base, u1 channel, u2 *value)
 {
     return adc_read_single_channel_to(adc_base, channel, value, ADC_WAIT_TIMEOUT);
 }
-
+#endif
 void ADC_Init(void)
 {
     const ST_INVERTER_CONFIG *cfg;

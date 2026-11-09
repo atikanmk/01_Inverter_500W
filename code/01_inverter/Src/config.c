@@ -1,13 +1,13 @@
 #include "config.h"
 
 static const ST_INVERTER_CONFIG g_inverter_config = {
-    .u1t_motor_pole_pairs = 10u,
+    .u1t_motor_pole_pairs = 26u,
     .u2t_speed_max_rpm = 4000u,
     .u2t_dc_max = 1u,
     .u2t_phase_max = 3u,
     .u1t_tps_perc_start = 5u,
-    .u2t_throttle_min_mv = 1900u,
-    .u2t_throttle_max_mv = 3000u,
+    .u2t_throttle_min_mv = 200u,
+    .u2t_throttle_max_mv = 1500u,
     .u4t_bemf_divider_top_ohm = 300000u,
     .u4t_bemf_divider_bottom_ohm = 10000u,
     .u4t_curr_ph_u_gain_mv_per_ca = 1200,

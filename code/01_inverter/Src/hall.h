@@ -29,7 +29,9 @@ extern "C" {
 #define HALL_CH3_PIN 3u
 
 /* Debounce time for Hall EXTI edges in microseconds. */
-#define HALL_DEBOUNCE_US 50u
+#define HALL_DEBOUNCE_US 300u
+/* Max time the ISR re-reads the pins when it sees 000/111 (channel skew). */
+#define HALL_SETTLE_US 20u
 
 /* CPU clock used for debounce / DWT timing (match SystemInit 72 MHz). */
 #define HALL_CPU_CLOCK_HZ 72000000u

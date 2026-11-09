@@ -46,7 +46,7 @@
 /* Allow RPM/angle timing once at least this many sector samples exist. */
 #define HALL_EST_MIN_HISTORY 2u
 #define HALL_EST_TIMEOUT_CYCLES (SystemCoreClock_Get())
-#define HALL_EST_MIN_MECH_RPM 30u
+#define HALL_EST_MIN_ELEC_RPM 100u
 /* Fresh measurement window: tolerate missed edges up to this many sectors. */
 #define HALL_SPEED_TIMEOUT_SECTORS 6u
 /* After measurement timeout, hold last filtered RPM this many extra sectors. */
@@ -93,6 +93,7 @@ static volatile s4 s4g_hall_speed_elec_rpm_raw;
 static volatile s4 s4g_hall_speed_mech_rpm;
 
 static uint32_t hall_debounce_cycles;
+static uint32_t hall_settle_cycles;
 
 static const uint8_t hall_pin_map[3] = { HALL_CH1_PIN, HALL_CH2_PIN, HALL_CH3_PIN };
 
@@ -115,10 +116,6 @@ static uint8_t hall_angle_to_sector(uint16_t angle_deg)
     return (uint8_t)(hall_norm_angle(angle_deg) / HALL_EST_SECTOR_DEG);
 }
 
-static uint16_t hall_sector_to_angle(uint8_t sector)
-{
-    return (uint16_t)((sector % 6u) * HALL_EST_SECTOR_DEG);
-}
 
 static uint8_t hall_est_is_timeout(uint32_t now_cycle)
 {
@@ -231,8 +228,9 @@ static void hall_est_reset_history(void)
 
 static void hall_est_add_sector_sample(uint32_t now_cycle, uint32_t sector_cycles)
 {
+    /* Reset only when edges stop for a long time, not on the age of the first sample. */
     if ((hall_est_sector_hist_count > 0u) &&
-        ((now_cycle - hall_est_sector_hist_start_cycle) > HALL_EST_TIMEOUT_CYCLES))
+        ((now_cycle - hall_est_last_cycle) > HALL_EST_TIMEOUT_CYCLES))
     {
         hall_est_reset_history();
     }
@@ -455,6 +453,14 @@ static void hall_handle_exti_line(uint8_t line, uint8_t channel)
 
         hall_last_irq_cycle[channel] = now_cycle;
         hall_refresh_all_levels();
+
+        /* Channels can skew by a few us: give 000/111 a short window to settle. */
+        while ((hall_pattern_valid == 0u) &&
+               ((DWT_CYCCNT - now_cycle) < hall_settle_cycles))
+        {
+            hall_refresh_all_levels();
+        }
+
         hall_edge_count[channel]++;
         Hall_OnEdge(channel, hall_level[channel]);
 
@@ -479,6 +485,7 @@ void Hall_Init(void)
 
     hall_timebase_init();
     hall_debounce_cycles = (SystemCoreClock_Get() / 1000000u) * HALL_DEBOUNCE_US;
+    hall_settle_cycles = (SystemCoreClock_Get() / 1000000u) * HALL_SETTLE_US;
 
     /*
      * Configure PA1, PA2, PA3 as input with pull-up/pull-down (MODE=00, CNF=10).
@@ -557,7 +564,6 @@ uint32_t Hall_GetInvalidPatternCount(void)
 
 EN_COM_STS_T eng_hall_ang_est(u2 *pu2t_angle_deg)
 {
-    const ST_INVERTER_CONFIG *cfg;
     uint32_t now_cycle;
     uint32_t elapsed_cycle;
     uint32_t est_offset;
@@ -575,13 +581,7 @@ EN_COM_STS_T eng_hall_ang_est(u2 *pu2t_angle_deg)
     }
 
     sector_cycles = hall_est_avg_sector_cycles;
-    cfg = config_get();
-    max_sector_cycles = 0u;
-    if ((cfg != 0) && (cfg->u1t_motor_pole_pairs != 0u))
-    {
-        max_sector_cycles = (SystemCoreClock_Get() * 10u) /
-            ((uint32_t)HALL_EST_MIN_MECH_RPM * cfg->u1t_motor_pole_pairs);
-    }
+    max_sector_cycles = (SystemCoreClock_Get() * 10u) / HALL_EST_MIN_ELEC_RPM;
 
     elapsed_cycle = now_cycle - hall_est_last_cycle;
 

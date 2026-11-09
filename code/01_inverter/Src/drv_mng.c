@@ -70,12 +70,17 @@ EN_COM_STS_T eng_drv_mng_init(void)
 EN_COM_STS_T eng_drv_mng_1ms(void)
 {
     u2 u2t_throttle_perc;
+    s4 s4t_spd_rpm;
 
     if (eng_cnv_get_throttle_perc(&u2t_throttle_perc) != EN_COM_STS_OK)
     {
         return EN_COM_STS_ERR;
     }
-    
+    if (eng_cnv_get_mtr_spd_rpm(&s4t_spd_rpm) != EN_COM_STS_OK)
+    {
+        return EN_COM_STS_ERR;
+    }
+
     if (u1sg_drv_mng_throttle_enabled == 1u)
     {
         if ((u2t_throttle_perc > DRV_MNG_THROTTLE_ENABLE_PERC) &&
@@ -84,7 +89,9 @@ EN_COM_STS_T eng_drv_mng_1ms(void)
             vdg_pwm_enable_output();
             u1sg_drv_mng_pwm_enabled = 1u;
         }
-        else if ((u2t_throttle_perc < DRV_MNG_THROTTLE_DISABLE_PERC) && (u1sg_drv_mng_pwm_enabled != 0u))
+        else if ((u2t_throttle_perc < DRV_MNG_THROTTLE_DISABLE_PERC) &&
+                 (s4t_spd_rpm == 0) &&
+                 (u1sg_drv_mng_pwm_enabled != 0u))
         {
             vdg_pwm_disable_output();
             u1sg_drv_mng_pwm_enabled = 0u;
